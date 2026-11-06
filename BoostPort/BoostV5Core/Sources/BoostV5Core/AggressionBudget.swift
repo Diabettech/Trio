@@ -29,7 +29,9 @@ public enum AggressionBudgetEngine {
         let sensitivity = min(max(sensitivityUserKnob, 0.8), 1.2)
         let aggressionModifier = mlScale * postExScale * sensitivity
         let rawBudget = baseInsulinReq * aggressionModifier
-        let floorBudget = AggressionBudgetConstants.budgetFloorFraction * baseInsulinReq
+        // The floor falls with Hypo Caution as the ML floor does; held at 0.30 it overrode the deeper
+        // cut above Hypo Caution 1.67 (AAPS Boost 6.3.0, 4a3c7a4341). Unchanged at Hypo Caution 1.0.
+        let floorBudget = AggressionBudgetConstants.budgetFloorFraction / max(hypoCautionUserKnob, 1.0) * baseInsulinReq
         let budget = max(floorBudget, rawBudget)
         return AggressionBudgetResult(
             budget: budget, mlHypoRiskScale: mlScale, postExerciseRecoveryScale: postExScale,

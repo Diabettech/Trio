@@ -305,6 +305,11 @@ public enum SleepStateDetector {
         let wakeGraceStart = (inputs.nightEndMinute - C.sleepScheduleToleranceMin + C.minutesPerDay) % C.minutesPerDay
         let nearScheduledWake = minuteInWrappedRange(inputs.nowMinuteOfDay, wakeGraceStart, inputs.nightEndMinute)
         _ = inOuterWindow // retained for readability; candidacy now keys on inSleepCandidateWindow
+        // Boost 6.3.0 pre-window hold (AAPS f88e53ba52, c361734560): SLEEPING is held from the start of
+        // candidacy, 90 min before nightStart, so a sleep detected early is not ended as "boundary" on
+        // the next cycle. Trio has no lie-in merge, so the hold ends at nightEnd.
+        let inHoldWindow = minuteInWrappedRange(inputs.nowMinuteOfDay, sleepCandStart, inputs.nightEndMinute)
+        let inPreWindow = minuteInWrappedRange(inputs.nowMinuteOfDay, sleepCandStart, inputs.nightStartMinute)
 
         var newState = state
 
@@ -441,8 +446,8 @@ public enum SleepStateDetector {
             }
 
         case .sleeping:
-            // Hard morning exit.
-            if !inOuterWindow {
+            // Hard morning exit, at the end of the hold window.
+            if !inHoldWindow {
                 newState = SleepDetectorState(
                     state: .awake, enteredAtMs: inputs.nowMs,
                     lastFreshHrSampleMs: newState.lastFreshHrSampleMs,
@@ -476,8 +481,27 @@ public enum SleepStateDetector {
                 // but ONLY when the feed is unreliable (drought established, can't corroborate). When
                 // HR is live the gentle rule governs and steps-alone must NOT wake (both-required
                 // guard preserved). Safety net for HR-death nights + the 2026-07-03 over-sleep lump.
-                let strongStepsWake = droughtEstablished && stepsInLookback >= C.wakeStepStrongThreshold
-                if gentleWake || strongStepsWake {
+                // Also in the 90 min before nightEnd, where the HR streak often fails while someone is
+                // up and walking; there it needs 100 steps in the last 15 min, so a batched upload of
+                // older steps does not wake (AAPS 1d09463b40).
+                let strongStepsWake = stepsInLookback >= C.wakeStepStrongThreshold &&
+                    (droughtEstablished || (nearScheduledWake && inputs.steps15min >= C.wakeStepThreshold))
+                // Pre-window wake routes (AAPS c361734560). With HR live and the clock far from the
+                // scheduled wake none of the routes above can fire, so a sleep held from the pre-window
+                // could not end before the night. Steps count from the SLEEPING entry, not the 60-min
+                // lookback, so the walk to bed cannot end the sleep it preceded.
+                let stepsSinceEntry: Int = {
+                    guard inPreWindow else { return 0 }
+                    let sinceEntryMin = Int((inputs.nowMs - newState.enteredAtMs) / C.msPerMinute)
+                    return stepGrowth(
+                        newState.stepSamples, nowMs: inputs.nowMs,
+                        lookbackMin: min(max(sinceEntryMin, 0), C.wakeStepLookbackMin)
+                    )
+                }()
+                let preWindowStepsWake = inPreWindow && stepsSinceEntry >= C.wakeStepStrongThreshold
+                let preWindowHrWake = inPreWindow && hrAboveWakeFloor &&
+                    (inputs.steps15min >= C.wakeStepFloor || stepsSinceEntry >= C.wakeStepThreshold)
+                if gentleWake || strongStepsWake || preWindowStepsWake || preWindowHrWake {
                     if newState.wakeCandidateSinceMs == nil {
                         newState.wakeCandidateSinceMs = inputs.nowMs
                     } else {
@@ -486,7 +510,10 @@ public enum SleepStateDetector {
                             newState = SleepDetectorState(
                                 state: .awake, enteredAtMs: inputs.nowMs,
                                 lastFreshHrSampleMs: newState.lastFreshHrSampleMs,
-                                wakeReason: gentleWake ? "hr_steps" : "steps", // both genuine wakes
+                                // all genuine wakes; the learner trains on hr_steps and steps only
+                                wakeReason: gentleWake ? "hr_steps"
+                                    : strongStepsWake ? "steps"
+                                    : preWindowHrWake ? "pw_hr_steps" : "pw_steps",
                                 stepSamples: newState.stepSamples, hrHighStreak: newState.hrHighStreak
                             )
                             transitioned = true

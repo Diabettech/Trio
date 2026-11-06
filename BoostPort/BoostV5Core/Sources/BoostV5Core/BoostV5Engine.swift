@@ -497,7 +497,8 @@ public enum BoostV5Engine {
         // respect exactly as both floors do. See primerSizing for the rules.
         let primer = Self.primerSizing(
             inputs, state: primerState, alreadyPrimedU: primerAppliedU,
-            mlScale: budget.mlHypoRiskScale, hardGateFired: phase3.reductions.hardGateFired != nil
+            mlScale: budget.mlHypoRiskScale, hardGateFired: phase3.reductions.hardGateFired != nil,
+            sessionLocked: newHypothesisState.committedInSession
         )
         let primerBolusU = primer.bolusU
         if primerBolusU > 0 {
@@ -596,14 +597,17 @@ public enum BoostV5Engine {
         state: MealHypothesis,
         alreadyPrimedU: Double,
         mlScale: Double,
-        hardGateFired: Bool
+        hardGateFired: Bool,
+        sessionLocked: Bool = false
     ) -> (bolusU: Double, debug: String) {
         let open = inputs.primerCapU > 0 && state == .observing && alreadyPrimedU <= 0
-            && inputs.delta >= Primer.deltaMin && inputs.deltaAccl > Primer.accelThreshold
+            && inputs.delta >= Primer.deltaMin && inputs.shortAvgDelta >= Primer.riseShortAvgMin
             && inputs.recentLowBg >= Primer.minRecentLowMgdl && !inputs.asleep
             && !inputs.exerciseActive && !inputs.postRescueWindow
             && !inputs.mealAnnounced
             && !hardGateFired
+            // No second primer once the session has committed (AAPS f1d0c93a8e).
+            && !sessionLocked
         guard open else { return (0, "") }
         // The cap is a true ceiling and the factors in [0, 1] scale it down. The rise factor
         // discriminates, carrying the magnitude of the actual rise. The glucose and insulin factors
@@ -689,8 +693,9 @@ private func rnd(_ x: Double, _ dp: Int) -> Double {
 }
 
 enum Primer {
-    /// Acceleration trigger, the base engine's release threshold.
-    static let accelThreshold = 10.0
+    /// Sustained-rise trigger, short average in mg/dL per 5 min. It replaced the acceleration
+    /// trigger (deltaAccl > 10), which a steady rise never meets (AAPS Boost 6.3.0, f1d0c93a8e).
+    static let riseShortAvgMin = 3.0
     /// Suppressed unless the 60-minute low is at or above this, guarding a rescue-carb rebound.
     static let minRecentLowMgdl = 80.0
     /// Absolute-rise floor, mg/dL per 5 min. A rise of 3 strictly dominates the old ratio gate:

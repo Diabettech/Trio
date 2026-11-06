@@ -39,6 +39,9 @@ public enum BoostV5AutoConfig {
     /// outlier. A percentile of n=4 is noise, not a dose habit. Below this floor the Confirmed cap
     /// falls back to the SMB p95 alone (still clamped to [1.5, 7.5]).
     public static let minManualBolusSamples = 10
+    /// Every fraction of the committed cap the primer is sized with: hypo-prone, neither, and well
+    /// controlled (AAPS PRIMER_FRACTIONS).
+    public static let primerFractions = [0.375, 0.6, 0.75]
 
     /// Upper clamp of the derived rolling-60-min cumulative SMB cap — the preference range max of
     /// `boostCumulativeSmbCap60Min` (0…10). The cap formula is "one confirm shot + two holds"; the
@@ -169,7 +172,7 @@ public enum BoostV5AutoConfig {
         // are raised by half. The new ceiling lands at three quarters of the old effective peak: a
         // deliberate quarter cut at full strength, on top of the much larger cut everywhere below
         // it, measured at about 85% less primer insulin overall and concentrated on genuine rises.
-        let primerFrac: Double = hypoProne ? 0.375 : (wellControlled ? 0.75 : 0.6)
+        let primerFrac: Double = hypoProne ? primerFractions[0] : (wellControlled ? primerFractions[2] : primerFractions[1])
         // The bound is one commit shot. The primer is an advance on the CONFIRMED shot, so it
         // should never exceed the shot it advances. Since the fraction is at most 0.75 this is an
         // invariant rather than a cutoff, and it scales in the person's own units because the

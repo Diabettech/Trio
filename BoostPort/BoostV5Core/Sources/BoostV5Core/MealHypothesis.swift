@@ -172,6 +172,12 @@ public enum MealHypothesisConstants {
     public static let recoveringReengageDelta = 3.0
     public static let recoveringReengageOffsetMgdl = 20.0
     public static let recoveringReengageMinAge = 1
+    /// COMMITTED backs off only once the rise is below this (mg/dL per 5 min), so a meal that is
+    /// slowing but still climbing keeps its dosing (AAPS Boost 6.3.0, 5600a68cfb).
+    public static let recoveringEntryMaxDelta = 3.0
+    /// RECOVERING re-engages COMMITTED on a rise above this whatever the acceleration. The gap to
+    /// recoveringEntryMaxDelta stops the state flicking between the two (AAPS 5600a68cfb).
+    public static let recoveringReengageRiseDelta = 8.0
     // 2026-07-03 retune (AAPS d2f9a08108; replay sweep over the cohort): Δ 8→6, accl 15→10,
     // score 0.60→0.65. This point catches +21 meals ~9 min earlier while REDUCING false fires
     // 39%→32% — the score raise pays for the physics relaxation. A plain physics relaxation
@@ -464,7 +470,7 @@ public enum MealHypothesisEngine {
             }
 
         case .committed:
-            let backOff = deltaAccl < C.recoveringDecelThreshold && deltaDeclining
+            let backOff = deltaAccl < C.recoveringDecelThreshold && deltaDeclining && delta < C.recoveringEntryMaxDelta
             if backOff {
                 next = MealHypothesisState(state: .recovering, ageCycles: 0, committedInSession: true, lastAgeMs: enterMs)
             } else {
@@ -472,10 +478,13 @@ public enum MealHypothesisEngine {
             }
 
         case .recovering:
+            // Two routes: re-acceleration, or a fast rise with any acceleration.
             let reEngage = age >= C.recoveringReengageMinAge &&
-                deltaAccl > C.recoveringReengageAccl &&
-                delta > C.recoveringReengageDelta &&
-                currentOffset > C.recoveringReengageOffsetMgdl
+                currentOffset > C.recoveringReengageOffsetMgdl &&
+                (
+                    (deltaAccl > C.recoveringReengageAccl && delta > C.recoveringReengageDelta) ||
+                        delta > C.recoveringReengageRiseDelta
+                )
             if reEngage {
                 next = MealHypothesisState(state: .committed, ageCycles: 0, committedInSession: true, lastAgeMs: enterMs)
             } else if delta < 0 || score < C.recoveringToIdleScore {

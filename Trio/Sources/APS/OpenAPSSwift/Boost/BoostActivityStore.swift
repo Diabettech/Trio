@@ -44,12 +44,32 @@ struct BoostActivitySnapshot: Codable, Sendable {
     // hysteresis period (AAPS a33752c9aa #18). Optional so older snapshots decode; nil = no hold,
     // which is the behaviour before 2026-10-08.
     var lastSleepBoundaryExitMs: Double? = nil
+    // The detector's effective (learned, later-only) night end in minutes of day; the lie-in window
+    // starts here (AAPS Boost 6.3.0). nil in older snapshots, which fall back to the configured end.
+    var effectiveNightEndMin: Int? = nil
 
     var updatedAt: Date
 }
 
 final class BoostActivityStore: @unchecked Sendable {
     static let shared = BoostActivityStore()
+
+    /// When the detector last confirmed a wake on steps or HR plus steps. In memory only, as in AAPS,
+    /// so a restart re-arms the lie-in failsafe, which is the cautious direction.
+    private static let wakeLock = NSLock()
+    private static var storedLastGenuineWakeMs: Double = 0
+    static var lastGenuineWakeMs: Double {
+        get { wakeLock.lock()
+            defer { wakeLock.unlock() }
+            return storedLastGenuineWakeMs }
+        set { wakeLock.lock()
+            defer { wakeLock.unlock() }
+            storedLastGenuineWakeMs = newValue }
+    }
+
+    /// The wakes that end a lie-in (AAPS StepFeed GENUINE_STEP_WAKES). A resume burst alone does not
+    /// count: a burst with no steps is the false awake the failsafe exists for.
+    static let genuineStepWakes: Set<String> = ["steps", "hr_steps", "pw_steps", "pw_hr_steps"]
 
     private let key = "boost_activity_snapshot_v2"
     private let lock = NSLock()

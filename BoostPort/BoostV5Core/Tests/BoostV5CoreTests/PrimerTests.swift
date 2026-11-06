@@ -12,13 +12,13 @@ final class PrimerTests: XCTestCase {
     /// A qualifying OBSERVING cycle: rise of 6 mg/dL per 5 min, accelerating, glucose in band,
     /// plenty of insulin headroom, awake, no recent low, outside the post-rescue window.
     private func inputs(
-        delta: Double = 6, deltaAccl: Double = 20, bg: Double = 140, iob: Double = 0.5,
+        delta: Double = 6, shortAvgDelta: Double? = nil, deltaAccl: Double = 20, bg: Double = 140, iob: Double = 0.5,
         maxIob: Double = 6, recentLowBg: Double = 120, asleep: Bool = false,
         exerciseActive: Bool = false, postRescueWindow: Bool = false,
         primerCapU: Double = 0.6, primerUseTempBasal: Bool = false
     ) -> V5Inputs {
         V5Inputs(
-            delta: delta, shortAvgDelta: delta - 1, deltaAccl: deltaAccl, bg: bg, eventualBg: bg + 40,
+            delta: delta, shortAvgDelta: shortAvgDelta ?? delta - 1, deltaAccl: deltaAccl, bg: bg, eventualBg: bg + 40,
             targetBg: 100, maxDelta: delta, minGuardBg: bg, minGuardThreshold: 80,
             deltaHistory: [2, 4, delta], iob: iob, maxIob: maxIob, baseInsulinReq: 1.0,
             roundSmbTo: 0.05, enableSmbPreChecks: true, mlHypoRisk: nil, mlMealLikely: 0.6,
@@ -87,12 +87,26 @@ final class PrimerTests: XCTestCase {
 
     func testEveryFloorIndividuallyBlocksThePrimer() {
         XCTAssertEqual(BoostV5Engine.decide(inputs(delta: 2.5), persisted: observing()).primerBolusU, 0)
-        XCTAssertEqual(BoostV5Engine.decide(inputs(deltaAccl: 9), persisted: observing()).primerBolusU, 0)
+        // Boost 6.3.0: a sustained rise (short average at least 3) opens it, not acceleration.
+        XCTAssertEqual(BoostV5Engine.decide(inputs(shortAvgDelta: 2.9), persisted: observing()).primerBolusU, 0)
         XCTAssertEqual(BoostV5Engine.decide(inputs(recentLowBg: 75), persisted: observing()).primerBolusU, 0)
         XCTAssertEqual(BoostV5Engine.decide(inputs(asleep: true), persisted: observing()).primerBolusU, 0)
         XCTAssertEqual(BoostV5Engine.decide(inputs(exerciseActive: true), persisted: observing()).primerBolusU, 0)
         XCTAssertEqual(BoostV5Engine.decide(inputs(postRescueWindow: true), persisted: observing()).primerBolusU, 0)
         XCTAssertEqual(BoostV5Engine.decide(inputs(primerCapU: 0), persisted: observing()).primerBolusU, 0)
+    }
+
+    func testFiresOnASteadyRiseWithoutAcceleration() {
+        // AAPS f1d0c93a8e: a steady 5 mg/dL per 5 min rise never met deltaAccl > 10.
+        let d = BoostV5Engine.decide(inputs(delta: 5, shortAvgDelta: 5, deltaAccl: 0), persisted: observing())
+        XCTAssertGreaterThan(d.primerBolusU, 0)
+    }
+
+    func testNoPrimerOnceTheSessionHasCommitted() {
+        // AAPS f1d0c93a8e: no primer on a second rise once a meal has been committed.
+        var s = observing()
+        s.mealHypothesis = MealHypothesisState(state: .observing, ageCycles: 1, committedInSession: true)
+        XCTAssertEqual(BoostV5Engine.decide(inputs(), persisted: s).primerBolusU, 0)
     }
 
     func testFiresOnlyOncePerObservingSession() {
@@ -199,7 +213,7 @@ final class PrimerTests: XCTestCase {
     func testTelemetryIsEmittedEvenWhenTheDoseRoundsToNothing() {
         // The gate opens but the glucose factor sizes it to nearly zero, so it rounds away. A
         // reader must still be able to tell that the gate opened.
-        let d = BoostV5Engine.decide(inputs(delta: 3.1, bg: 91), persisted: observing())
+        let d = BoostV5Engine.decide(inputs(delta: 3.1, shortAvgDelta: 3.0, bg: 91), persisted: observing())
         XCTAssertEqual(d.primerBolusU, 0)
         XCTAssertFalse(d.primerScaleDebug.isEmpty)
     }

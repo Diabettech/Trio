@@ -10,10 +10,19 @@ final class AggressionBudgetTests: XCTestCase {
         XCTAssertEqual(r.mlHypoRiskScale, 1.0, accuracy: 1E-9)
     }
 
-    func testHardFloorAt30Percent() {
-        // high risk + high caution knob drives mlScale to its 0.25 floor (raw 0.25 < 0.30) → 30% floor binds.
+    func testFloorFallsWithHypoCaution() {
+        // Boost 6.3.0 (AAPS 4a3c7a4341): the 30% floor is divided by Hypo Caution above 1.0. At risk
+        // 1.0 and Hypo Caution 2.0 mlScale is 0.25, so the raw budget 0.25 x 2.0 now stands over
+        // the 0.15 x 2.0 floor; the old fixed 0.30 floor overrode it.
         let r = B.aggressionBudget(baseInsulinReq: 2.0, mlHypoRisk: 1.0, inPostExerciseWindow: false, hypoCautionUserKnob: 2.0)
-        XCTAssertEqual(r.budget, 0.30 * 2.0, accuracy: 1E-9)
+        XCTAssertEqual(r.floorBudget, 0.15 * 2.0, accuracy: 1E-9)
+        XCTAssertEqual(r.budget, 0.25 * 2.0, accuracy: 1E-9)
+    }
+
+    func testFloorAt30PercentWithNeutralHypoCaution() {
+        // At Hypo Caution 1.0 (and below) the floor is unchanged.
+        let r = B.aggressionBudget(baseInsulinReq: 2.0, mlHypoRisk: 1.0, inPostExerciseWindow: false, hypoCautionUserKnob: 0.8)
+        XCTAssertEqual(r.floorBudget, 0.30 * 2.0, accuracy: 1E-9)
     }
 
     func testMlScaleFloorsAtHalfWithDefaultKnob() {

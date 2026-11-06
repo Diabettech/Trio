@@ -155,8 +155,9 @@ final class BaseBoostActivityMonitor: BoostActivityMonitor, Injectable {
         // detector; the night-mode clock window itself stays configured). Below the learning
         // threshold these fall back to the configured night window / measured resting HR.
         let history = BoostSleepHistoryStore.load()
-        let offsetMs = Double(TimeZone.current.secondsFromGMT(for: now)) * 1000.0
-        let agg = SleepHistoryTracker.aggregate(history, localOffsetMs: offsetMs)
+        let agg = SleepHistoryTracker.aggregate(history, offsetAt: { ms in
+            Double(TimeZone.current.secondsFromGMT(for: Date(timeIntervalSince1970: ms / 1000))) * 1000.0
+        })
         let configNightStart = Int(d(prefs.boostNightModeStartHour) * 60)
         let configNightEnd = Int(d(prefs.boostNightModeEndHour) * 60)
         // The learned window may only nudge the configured night start/end by ±BAND, and the wake
@@ -207,6 +208,9 @@ final class BaseBoostActivityMonitor: BoostActivityMonitor, Injectable {
         }
         // A boundary exit this refresh starts the hold; otherwise carry the last one forward.
         let lastBoundaryExitMs: Double? = sleep.wakeReason == "boundary" ? nowMs : prev?.lastSleepBoundaryExitMs
+        if let reason = sleep.wakeReason, BoostActivityStore.genuineStepWakes.contains(reason) {
+            BoostActivityStore.lastGenuineWakeMs = nowMs
+        }
 
         // Activity classification runs AFTER the sleep detector because its inactivity branch is
         // excluded during sleep (AAPS 37a79aac83 / 483d2fec20) and needs this cycle's state. The
@@ -230,12 +234,13 @@ final class BaseBoostActivityMonitor: BoostActivityMonitor, Injectable {
         )
         let inBed = sleepSignals.detectorAsleep
         // Morning lie-in, computed locally from this cycle's steps rather than from the stored
-        // snapshot (which is the previous cycle's). Window is [nightEnd, nightEnd + sleepInHours).
+        // snapshot (which is the previous cycle's). Window is [nightEnd, nightEnd + sleepInHours),
+        // from the detector's effective night end since Boost 6.3.0 (AAPS 290348d59a).
         let sleepInMinutes = Int(d(prefs.boostSleepInHours) * 60)
         let lieIn: Bool = {
             guard sleepInMinutes > 0 else { return false }
-            let windowEnd = (configNightEnd + sleepInMinutes) % 1440
-            guard NightMode.minuteInWindow(now: nowMinute, start: configNightEnd, end: windowEnd)
+            let windowEnd = (effectiveNightEnd + sleepInMinutes) % 1440
+            guard NightMode.minuteInWindow(now: nowMinute, start: effectiveNightEnd, end: windowEnd)
             else { return false }
             return Double(steps60) < d(prefs.boostSleepInSteps)
         }()
@@ -367,6 +372,7 @@ final class BaseBoostActivityMonitor: BoostActivityMonitor, Injectable {
             hrSource: hrRes.active,
             hrSourceStates: hrRes.note,
             lastSleepBoundaryExitMs: lastBoundaryExitMs,
+            effectiveNightEndMin: effectiveNightEnd,
             updatedAt: now
         )
         BoostActivityStore.shared.snapshot = snap

@@ -583,8 +583,11 @@ final class BaseAPSManager: APSManager, Injectable {
             // TBR<70 < 3.5% (fail-closed). A 14d metric barely moves within an hour, so recompute at
             // most hourly and only when the floor could actually engage (active mode + toggle on) —
             // otherwise the gate stays fail-closed and the 14d BG scan is skipped. BoostV5Adapter
-            // ANDs the cached result into composedFloorActive.
-            if boostPrefs?.boostMode == .active, boostPrefs?.boostV5ComposedFloorActive == true,
+            // ANDs the cached result into composedFloorActive, and since Boost 6.3.0 (AAPS 2221fcb96c)
+            // into aggressive early confirm, so either switch being on keeps the gate fresh. Shadow
+            // mode refreshes it too, so the logged would-be dose sees the gate active mode would.
+            if (boostPrefs?.boostMode ?? .off) != .off,
+               boostPrefs?.boostV5ComposedFloorActive == true || boostPrefs?.boostV5AggressiveEarlyConfirm == true,
                BoostComposedFloorGate.shouldRecompute(now: now)
             {
                 let since = now.addingTimeInterval(-14 * 86400)
@@ -1269,12 +1272,52 @@ final class BaseAPSManager: APSManager, Injectable {
                     case .aggressiveEarlyConfirm,
                          .fastCarbConfirm,
                          .primerTbrFallback,
-                         .velocityBudgetFloor: break // boolean knobs are not re-derived
+                         .velocityBudgetFloor: break // the on/off settings are re-evaluated below
                     }
                 },
                 setBaseline: { BoostRedriveStore.setBaseline($0, $1) },
-                setPending: { BoostRedriveStore.setPending($0, $1) }
+                setPending: { BoostRedriveStore.setPending($0, $1) },
+                isUserTuned: { Self.boostKnobUserTuned($0, prefs, stock: stock) },
+                lastWritten: { BoostRedriveStore.lastWritten($0) },
+                recordWritten: { BoostRedriveStore.recordWritten($0, $1) }
             )
+            // Primer delivery route and the two insulin-adding switches, re-evaluated each window
+            // (AAPS Boost 6.3.0, audit 16). The derivation's primerTbrFallback is the negation of
+            // its well-controlled verdict.
+            let route = BoostV5AutoConfigApply.resolvePrimerRoute(
+                wellControlled: !s.primerTbrFallback,
+                bgReadings: n,
+                previousWellControlled: BoostRedriveStore.pendingFlag(BoostV5AutoConfigApply.primerRoutePrevWcKey),
+                stored: prefs.boostV5PrimerTbrFallback,
+                lastWritten: BoostRedriveStore.lastWrittenBool(.primerTbrFallback),
+                put: { prefs.boostV5PrimerTbrFallback = $0 },
+                recordWritten: { BoostRedriveStore.recordWrittenBool(.primerTbrFallback, $0) },
+                recordWellControlled: { BoostRedriveStore.setPendingFlag(BoostV5AutoConfigApply.primerRoutePrevWcKey, $0) }
+            )
+            debug(.apsManager, "BoostV5 re-derivation: primerTbrFallback → \(route.reason)")
+            let raiseGuard = tbr70 > BoostV5AutoConfigApply.tbrRaiseGuardPct ||
+                sev54 >= BoostV5AutoConfigApply.tbr54RaiseGuardPct
+            for (knob, allowsOn) in [
+                (BoostAutoConfigKnob.aggressiveEarlyConfirm, s.aggressiveEarlyConfirm),
+                (.fastCarbConfirm, s.fastCarbConfirm)
+            ] {
+                let verdictKey = BoostV5AutoConfigApply.switchPreviousVerdictKey(knob)
+                let isAec = knob == .aggressiveEarlyConfirm
+                let r = BoostV5AutoConfigApply.resolveInsulinAddingSwitch(
+                    allowsOn: allowsOn,
+                    raiseGuard: raiseGuard,
+                    bgReadings: n,
+                    previousAllowsOn: BoostRedriveStore.pendingFlag(verdictKey),
+                    stored: isAec ? prefs.boostV5AggressiveEarlyConfirm : prefs.boostV5FastCarbConfirm,
+                    defaultValue: isAec ? stock.boostV5AggressiveEarlyConfirm : stock.boostV5FastCarbConfirm,
+                    lastWritten: BoostRedriveStore.lastWrittenBool(knob),
+                    userMarked: BoostRedriveStore.lastWritten(knob) == BoostV5AutoConfigApply.switchUserSetMark,
+                    put: { if isAec { prefs.boostV5AggressiveEarlyConfirm = $0 } else { prefs.boostV5FastCarbConfirm = $0 } },
+                    recordWritten: { BoostRedriveStore.recordWrittenBool(knob, $0) },
+                    recordVerdict: { BoostRedriveStore.setPendingFlag(verdictKey, $0) }
+                )
+                debug(.apsManager, "BoostV5 re-derivation: \(knob.rawValue) → \(r.reason)")
+            }
             settingsManager.preferences = prefs
             for r in resolutions {
                 debug(.apsManager, "BoostV5 re-derivation: \(r.knob.rawValue) → \(r.reason)")
@@ -1488,14 +1531,20 @@ final class BaseAPSManager: APSManager, Injectable {
                          .velocityBudgetFloor: break // boolean knobs handled below
                     }
                 },
-                markResolved: markResolved
+                markResolved: markResolved,
+                recordWritten: { BoostRedriveStore.recordWritten($0, $1) }
             )
             // Boolean knob (mirrors the Kotlin plugin): apply only while still at the factory
             // default, then resolve either way.
             var fastCarbApplied: String?
             if !resolved(.fastCarbConfirm) {
+                if prefs.boostV5FastCarbConfirm != stock.boostV5FastCarbConfirm {
+                    // Off its default before onboarding: the user's, so re-derivation never changes it.
+                    BoostRedriveStore.recordWritten(.fastCarbConfirm, BoostV5AutoConfigApply.switchUserSetMark)
+                }
                 if prefs.boostV5FastCarbConfirm == stock.boostV5FastCarbConfirm {
                     prefs.boostV5FastCarbConfirm = s.fastCarbConfirm
+                    BoostRedriveStore.recordWrittenBool(.fastCarbConfirm, s.fastCarbConfirm)
                     if s.fastCarbConfirm != stock.boostV5FastCarbConfirm {
                         fastCarbApplied = "fastCarbConfirm=\(s.fastCarbConfirm)"
                     }
@@ -1508,8 +1557,12 @@ final class BaseAPSManager: APSManager, Injectable {
             // cut rather than the hypo-prone one, so a user the data does not clear gets neither.
             var booleanApplied: [String] = fastCarbApplied.map { [$0] } ?? []
             if !resolved(.aggressiveEarlyConfirm) {
+                if prefs.boostV5AggressiveEarlyConfirm != stock.boostV5AggressiveEarlyConfirm {
+                    BoostRedriveStore.recordWritten(.aggressiveEarlyConfirm, BoostV5AutoConfigApply.switchUserSetMark)
+                }
                 if prefs.boostV5AggressiveEarlyConfirm == stock.boostV5AggressiveEarlyConfirm {
                     prefs.boostV5AggressiveEarlyConfirm = s.aggressiveEarlyConfirm
+                    BoostRedriveStore.recordWrittenBool(.aggressiveEarlyConfirm, s.aggressiveEarlyConfirm)
                     if s.aggressiveEarlyConfirm != stock.boostV5AggressiveEarlyConfirm {
                         booleanApplied.append("aggressiveEarlyConfirm=\(s.aggressiveEarlyConfirm)")
                     }
@@ -1519,6 +1572,7 @@ final class BaseAPSManager: APSManager, Injectable {
             if !resolved(.velocityBudgetFloor) {
                 if prefs.boostV5VelocityBudgetActive == stock.boostV5VelocityBudgetActive {
                     prefs.boostV5VelocityBudgetActive = s.velocityBudgetFloor
+                    BoostRedriveStore.recordWrittenBool(.velocityBudgetFloor, s.velocityBudgetFloor)
                     if s.velocityBudgetFloor != stock.boostV5VelocityBudgetActive {
                         booleanApplied.append("velocityBudgetFloor=\(s.velocityBudgetFloor)")
                     }
@@ -1528,6 +1582,7 @@ final class BaseAPSManager: APSManager, Injectable {
             if !resolved(.primerTbrFallback) {
                 if prefs.boostV5PrimerTbrFallback == stock.boostV5PrimerTbrFallback {
                     prefs.boostV5PrimerTbrFallback = s.primerTbrFallback
+                    BoostRedriveStore.recordWrittenBool(.primerTbrFallback, s.primerTbrFallback)
                     if s.primerTbrFallback != stock.boostV5PrimerTbrFallback {
                         booleanApplied.append("primerTbrFallback=\(s.primerTbrFallback)")
                     }

@@ -106,7 +106,9 @@ enum BoostV5Adapter {
         let shortAvg = (glucoseStatus.shortAvgDelta as NSDecimalNumber).doubleValue
         let longAvg = (glucoseStatus.longAvgDelta as NSDecimalNumber).doubleValue
         let bg = (glucoseStatus.glucose as NSDecimalNumber).doubleValue
-        let maxDelta = abs(delta) // AAPS: maxDelta = abs(gs.delta) (NOT glucoseStatus.maxDelta)
+        // AAPS v5MaxDelta (Boost 6.3.0, 3c3a9c8520): the largest of the latest change and the two
+        // averages, as V1 measures it, where it used to be abs(delta) alone.
+        let maxDelta = max(abs(delta), shortAvg, longAvg)
         let deltaAccl = DynIsf.deltaAccl(delta: delta, shortAvgDelta: shortAvg)
 
         let eventualBg = determination.eventualBG.map(Double.init) ?? bg
@@ -222,7 +224,8 @@ enum BoostV5Adapter {
                 fastCarbConfirmEnabled: knobs.fastCarbConfirm,
                 // 2026-07-17 aggressive early confirm. Timing only, so it needs no mode gate here:
                 // the whole engine result is discarded in shadow mode.
-                aggressiveEarlyConfirmEnabled: knobs.aggressiveEarlyConfirm,
+                // Also held off by the 14-day time-below-range gate the composed floor uses (AAPS 2221fcb96c).
+                aggressiveEarlyConfirmEnabled: knobs.aggressiveEarlyConfirm && BoostComposedFloorGate.allowed,
                 // 2026-07-06/07 composed brake-floor inputs (AAPS e0f18ddd0e + 730b3dcb2c). Computed
                 // here from the SAME sources the override seam uses: post-rescue = rolling 45-min CGM
                 // low < 75 (SafetyGateConstants.postRescueLowThresholdMgdl); v1WouldDose = the base
@@ -477,15 +480,24 @@ enum BoostV5Adapter {
     /// SMB rules. Requires a FRESH snapshot (≤30 min): without live step data we can't confirm a lie-in,
     /// and the HR sleep gate already covers the still-asleep case — so we don't assert one on stale
     /// data. (2026-07-02, mirrors AAPS c94c5c72d6; Trio reads steps from the async snapshot.)
+    ///
+    /// Boost 6.3.0 (AAPS 290348d59a): the window starts at the detector's effective night end, the
+    /// learned one when it is later than configured, and a wake the detector confirmed on steps or HR
+    /// plus steps since 90 min before that end stands the failsafe down.
     static func sleepInActive(preferences: Preferences, clock: Date) -> Bool {
         let sleepInMinutes = Int((dbl(preferences.boostSleepInHours) ?? 2.0) * 60)
         guard sleepInMinutes > 0 else { return false }
-        let nightEnd = Int((dbl(preferences.boostNightModeEndHour) ?? 7) * 60)
+        guard let snap = BoostActivityStore.shared.snapshot, clock.timeIntervalSince(snap.updatedAt) <= 1800,
+              let steps60 = snap.steps60min else { return false }
+        let nightEnd = snap.effectiveNightEndMin ?? Int((dbl(preferences.boostNightModeEndHour) ?? 7) * 60)
         let windowEnd = (nightEnd + sleepInMinutes) % 1440
-        guard minuteInWrapped(minuteOfDay(clock), nightEnd, windowEnd) else { return false }
-        guard let steps60 = BoostActivityStore.shared.snapshot
-            .flatMap({ clock.timeIntervalSince($0.updatedAt) <= 1800 ? $0.steps60min : nil }) else { return false }
-        return steps60 < (dbl(preferences.boostSleepInSteps) ?? 250)
+        let now = minuteOfDay(clock)
+        guard minuteInWrapped(now, nightEnd, windowEnd) else { return false }
+        // Minutes since (nightEnd - 90), on the clock; the wake counts if it is no older than that.
+        let sinceGraceStartMin = (now - nightEnd + SleepStateConstants.sleepScheduleToleranceMin + 1440) % 1440
+        let genuineWakeThisMorning = BoostActivityStore.lastGenuineWakeMs >=
+            clock.timeIntervalSince1970 * 1000 - Double(sinceGraceStartMin) * 60000
+        return steps60 < (dbl(preferences.boostSleepInSteps) ?? 250) && !genuineWakeThisMorning
     }
 
     /// Compact telemetry string appended to the determination reason (shadow + active).

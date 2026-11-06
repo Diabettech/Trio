@@ -860,7 +860,10 @@ final class OpenAPS {
                     ?? BoostV1Determination.boostActive(profile: profile, preferences: preferences, clock: clock)
                 let sleepInActive = v1Gate.1
                 let boostActive = v1Gate.0
-                if microBolusAllowed, !asleep, boostActive {
+                // V1 zero-temped for a low this cycle: leave the cycle to it, so no meal-state SMB
+                // lands on a suspend (AAPS OpenAPSBoostPlugin, Boost 6.3.0, 10c1c01306).
+                let v1LowSuspend = det.reason.contains(BoostV1Engine.lowSuspendTag)
+                if microBolusAllowed, !asleep, boostActive, !v1LowSuspend {
                     // Anti-stacking hard gate — faithful port of OpenAPSBoostPlugin.kt:1262. The
                     // rolling-60-min cumulative-SMB cap bounds dose FREQUENCY (per-shot caps don't);
                     // suppress the V6 SMB this cycle once the last hour's SMB volume reaches it.
@@ -1108,6 +1111,8 @@ final class OpenAPS {
                     }
                 } else if asleep {
                     det.reason += " V6 suppressed (SLEEPING) — base SMB stands;"
+                } else if v1LowSuspend {
+                    det.reason += " V6 override skipped (V1 low suspend);"
                 } else if !boostActive {
                     det.reason += sleepInActive
                         ? " V6 override skipped (Boost inactive: morning lie-in) — base SMB stands;"

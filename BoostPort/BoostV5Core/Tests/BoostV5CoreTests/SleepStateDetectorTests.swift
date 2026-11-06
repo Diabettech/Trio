@@ -54,6 +54,47 @@ final class SleepStateDetectorTests: XCTestCase {
 
     private let minute = 60000.0
 
+    // MARK: Boost 6.3.0 pre-window hold and steps-alone wake before night end
+
+    func testSleepDetectedBeforeNightStartIsHeldNotEndedAsBoundary() {
+        // 21:00, 60 min before the 22:00 night start, inside the 90-min candidacy window.
+        let now = 1_700_000_000_000.0
+        let s = SleepDetectorState(state: .sleeping, enteredAtMs: now - 10 * minute)
+        let r = D.step(makeInputs(avgHeartRate: 55, nowMinuteOfDay: 1260, nowMs: now), s)
+        XCTAssertEqual(r.state, .sleeping)
+        XCTAssertNil(r.wakeReason)
+    }
+
+    func testSleepBeforeTheCandidacyWindowStillEndsAsBoundary() {
+        // 20:00 is outside the hold, so the hard exit applies.
+        let now = 1_700_000_000_000.0
+        let s = SleepDetectorState(state: .sleeping, enteredAtMs: now - 10 * minute)
+        let r = D.step(makeInputs(avgHeartRate: 55, nowMinuteOfDay: 1200, nowMs: now), s)
+        XCTAssertEqual(r.state, .awake)
+        XCTAssertEqual(r.wakeReason, "boundary")
+    }
+
+    func testStepsAloneWakeNearNightEndWithLiveHr() {
+        // 06:30 with HR live (no drought): 300 steps over the lookback and 120 in the last 15 min
+        // wake after the hysteresis; before 6.3.0 steps alone needed an HR drought.
+        let t0 = 1_700_000_000_000.0
+        // Three fresh samples a cycle, so the feed counts as reliable and no drought is established.
+        func live(_ at: Double) -> [SleepHrReading] {
+            (0 ..< 3).map { SleepHrReading(timestampMs: at - Double($0) * minute, beatsPerMinute: 55, durationMs: 1000) }
+        }
+        var s = SleepDetectorState(state: .sleeping, enteredAtMs: t0 - 300 * minute, lastFreshHrSampleMs: t0 - minute)
+        s = D.step(makeInputs(hrReadings: live(t0), steps15min: 0, nowMinuteOfDay: 380, nowMs: t0, stepsToday: 100), s)
+        s = D.step(makeInputs(
+            hrReadings: live(t0 + 5 * minute), steps15min: 120, nowMinuteOfDay: 385, nowMs: t0 + 5 * minute, stepsToday: 400
+        ), s)
+        XCTAssertEqual(s.state, .sleeping) // candidate started
+        s = D.step(makeInputs(
+            hrReadings: live(t0 + 11 * minute), steps15min: 120, nowMinuteOfDay: 391, nowMs: t0 + 11 * minute, stepsToday: 420
+        ), s)
+        XCTAssertEqual(s.state, .awake)
+        XCTAssertEqual(s.wakeReason, "steps")
+    }
+
     // MARK: AWAKE → PRE_SLEEP
 
     func testAwakeToPreSleepAtLeadWindow() {

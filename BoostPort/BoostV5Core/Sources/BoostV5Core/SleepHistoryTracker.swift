@@ -130,6 +130,14 @@ public enum SleepHistoryTracker {
     }
 
     public static func aggregate(_ h: History, localOffsetMs: Double) -> Aggregate {
+        aggregate(h, offsetAt: { _ in localOffsetMs })
+    }
+
+    /// Aggregates with each session time converted at the UTC offset in force at that instant
+    /// (AAPS Boost 6.3.0, f4d7f1a0d4). With today's offset for all of them, sessions that began at
+    /// 23:00 BST read as 22:00 after the clocks went back, and the learned onset moved an hour early
+    /// until the window refilled.
+    public static func aggregate(_ h: History, offsetAt: (Double) -> Double) -> Aggregate {
         let restingHrSamples = h.sessions.compactMap(\.sleepHrP10)
         let daytimeHrSamples = h.sessions.compactMap(\.daytimeHrP10)
         let restingHr = restingHrSamples.count >= minSessionsForLearned ? median(restingHrSamples) : nil
@@ -143,7 +151,7 @@ public enum SleepHistoryTracker {
         // genuine getting-up signal, so it trains too.
         let genuineWakeMins = h.sessions
             .filter { $0.wakeReason == "hr_steps" || $0.wakeReason == "resume" || $0.wakeReason == "steps" }
-            .map { msToMinOfDay($0.wakeMs, localOffsetMs: localOffsetMs) }
+            .map { msToMinOfDay($0.wakeMs, localOffsetMs: offsetAt($0.wakeMs)) }
         let wakeAvg = genuineWakeMins.count >= minSessionsForLearned ? circularMean(genuineWakeMins) : nil
 
         if h.sessions.count < minSessionsForLearned {
@@ -153,7 +161,7 @@ public enum SleepHistoryTracker {
                 restingHrSampleCount: restingHrSamples.count, daytimeHrSampleCount: daytimeHrSamples.count
             )
         }
-        let sleepStartMin = h.sessions.map { msToMinOfDay($0.sleepStartMs, localOffsetMs: localOffsetMs) }
+        let sleepStartMin = h.sessions.map { msToMinOfDay($0.sleepStartMs, localOffsetMs: offsetAt($0.sleepStartMs)) }
         let durations = h.sessions.map { Int(($0.wakeMs - $0.sleepStartMs) / 60000.0) }
         return Aggregate(
             sleepStartMinAvg: circularMean(sleepStartMin),

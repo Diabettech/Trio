@@ -301,7 +301,9 @@ public enum SafetyGates {
     ) -> Double {
         switch state {
         case .confirmed: return min(dose, confirmedCapU)
-        case .committed: return min(dose, committedCapU)
+        // RECOVERING never gives more in one cycle than COMMITTED (AAPS Boost 6.3.0, 72f8bc93bc).
+        case .committed,
+             .recovering: return min(dose, committedCapU)
         default: return dose
         }
     }

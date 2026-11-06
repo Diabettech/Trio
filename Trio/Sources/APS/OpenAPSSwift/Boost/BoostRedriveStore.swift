@@ -12,6 +12,8 @@ import Foundation
 ///   being lost.
 /// - the PENDING value per knob: a quantised knob's proposed value awaiting its second consecutive
 ///   derivation, which is what stops it flapping across a threshold.
+/// - the WRITTEN value per knob: what auto-config last wrote, so a computed knob the user has
+///   since edited is recognised and kept (AAPS Boost 6.3.0 written ledger).
 /// - the last evaluation time, for the cadence.
 ///
 /// UserDefaults rather than Preferences, matching `BoostActivityStore` and `BoostMealTimeStore`:
@@ -29,6 +31,7 @@ enum BoostRedriveStore {
     private static let baselineKey = "boost.redrive.baseline"
     private static let pendingKey = "boost.redrive.pending"
     private static let lastRunKey = "boost.redrive.lastRunMs"
+    private static let writtenKey = "boost.redrive.written"
 
     private static let lock = NSLock()
 
@@ -64,6 +67,33 @@ enum BoostRedriveStore {
         update(pendingKey) { $0[knob.rawValue] = value }
     }
 
+    static func lastWritten(_ knob: BoostAutoConfigKnob) -> Double? {
+        map(writtenKey)[knob.rawValue]
+    }
+
+    static func recordWritten(_ knob: BoostAutoConfigKnob, _ value: Double) {
+        update(writtenKey) { $0[knob.rawValue] = value }
+    }
+
+    /// A boolean knob's last write, read as AAPS reads it: a value of 0 or more (the user-set mark
+    /// is negative) as true at 0.5 and above.
+    static func lastWrittenBool(_ knob: BoostAutoConfigKnob) -> Bool? {
+        lastWritten(knob).flatMap { $0 >= 0 ? $0 >= 0.5 : nil }
+    }
+
+    static func recordWrittenBool(_ knob: BoostAutoConfigKnob, _ value: Bool) {
+        recordWritten(knob, value ? 1.0 : 0.0)
+    }
+
+    /// Pending entries not tied to a knob, such as a window's previous verdict.
+    static func pendingFlag(_ key: String) -> Bool? {
+        map(pendingKey)[key].map { $0 >= 0.5 }
+    }
+
+    static func setPendingFlag(_ key: String, _ value: Bool?) {
+        update(pendingKey) { $0[key] = value.map { $0 ? 1.0 : 0.0 } }
+    }
+
     /// Clear everything. Used by tests for isolation.
     static func reset() {
         lock.lock()
@@ -71,6 +101,7 @@ enum BoostRedriveStore {
         UserDefaults.standard.removeObject(forKey: baselineKey)
         UserDefaults.standard.removeObject(forKey: pendingKey)
         UserDefaults.standard.removeObject(forKey: lastRunKey)
+        UserDefaults.standard.removeObject(forKey: writtenKey)
     }
 
     private static func map(_ key: String) -> [String: Double] {

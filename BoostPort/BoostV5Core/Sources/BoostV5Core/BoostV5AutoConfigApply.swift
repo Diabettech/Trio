@@ -47,7 +47,7 @@ public enum BoostAutoConfigKnob: String, CaseIterable, Sendable {
 /// value the user (or an imported preset) has ALREADY tuned. Mirrors AAPS `BoostV5AutoConfigApply`
 /// (b2c0705e5e + the fe9d8a1a13 amendments + the 131923247e versioned re-migration).
 ///
-/// ── Per-knob resolution (2026-07 fix, field evidence: Roman on AAPS) ─────────────────────────
+/// ── Per-knob resolution (2026-07 fix, field evidence on AAPS) ─────────────────────────
 /// The original design used one global "did run" flag (`boostV5AutoConfigDone` in Trio's
 /// Preferences). Failure mode: once the flag was consumed (older build, or carried in via a
 /// settings import), the whole run — including knobs ADDED to auto-config later — was suppressed
@@ -148,6 +148,10 @@ public enum BoostV5AutoConfigApply {
         case awaitingConfirmation
         /// First sight: where the derivation currently sits was recorded and nothing was written.
         case baselineRecorded
+        /// An aggression raise stopped at `aggressionAutoCeiling`.
+        case atNeutralCeiling
+        /// The window had too few readings to judge; nothing changed.
+        case insufficientEvidence
     }
 
     /// Per-knob classification record. `suggestedValue` is the final derived value for the knob
@@ -189,7 +193,8 @@ public enum BoostV5AutoConfigApply {
         currentDefault: (BoostAutoConfigKnob) -> Double,
         isUserTuned: (BoostAutoConfigKnob) -> Bool,
         put: (BoostAutoConfigKnob, Double) -> Void,
-        markResolved: (BoostAutoConfigKnob) -> Void
+        markResolved: (BoostAutoConfigKnob) -> Void,
+        recordWritten: (BoostAutoConfigKnob, Double) -> Void = { _, _ in }
     ) -> [Resolution] {
         var resolutions: [Resolution] = []
         var operative: [BoostAutoConfigKnob: Double] = [:]
@@ -223,6 +228,7 @@ public enum BoostV5AutoConfigApply {
                 return
             }
             put(knob, derived)
+            recordWritten(knob, derived)
             markResolved(knob)
             operative[knob] = derived
             resolutions.append(Resolution(
@@ -293,6 +299,24 @@ public enum BoostV5AutoConfigApply {
     /// Deadband on the recomputed primer ceiling, its own measured half-width.
     public static let redrivePrimerDeadband = 0.056
 
+    /// The highest value re-derivation raises aggression to. Onboarding never derives above
+    /// neutral, and movement tracking could otherwise carry a user's offset past it. A value above
+    /// 1.0 set by hand is kept and may still be lowered (AAPS Boost 6.3.0 AGGRESSION_AUTO_CEILING).
+    public static let aggressionAutoCeiling = 1.0
+
+    /// Whether a computed knob (the cumulative cap, the primer cap) is still auto-config's to
+    /// recompute (AAPS computedKnobOwned, Boost 6.3.0). A value at a factory default is
+    /// auto-config's, as is the value auto-config last wrote. Installs with no record of a write
+    /// take a stored value as auto-config's only when it is within `tolerance` of one of
+    /// `autoValues`, the recomputations from the caps as they stood when the run began.
+    public static func computedKnobOwned(
+        userTuned: Bool, stored: Double, lastWritten: Double?, autoValues: [Double], tolerance: Double
+    ) -> Bool {
+        if !userTuned { return true }
+        if let lastWritten { return abs(stored - lastWritten) <= defaultEps }
+        return autoValues.contains { abs(stored - $0) <= tolerance + defaultEps }
+    }
+
     /// Apply the derivation's MOVEMENT to each tracked knob's current value, rather than
     /// overwriting it with a fresh absolute derivation.
     ///
@@ -325,7 +349,10 @@ public enum BoostV5AutoConfigApply {
         pendingValue: (BoostAutoConfigKnob) -> Double?,
         put: (BoostAutoConfigKnob, Double) -> Void,
         setBaseline: (BoostAutoConfigKnob, Double) -> Void,
-        setPending: (BoostAutoConfigKnob, Double?) -> Void
+        setPending: (BoostAutoConfigKnob, Double?) -> Void,
+        isUserTuned: (BoostAutoConfigKnob) -> Bool = { _ in false },
+        lastWritten: (BoostAutoConfigKnob) -> Double? = { _ in nil },
+        recordWritten: (BoostAutoConfigKnob, Double) -> Void = { _, _ in }
     ) -> [Resolution] {
         var out: [Resolution] = []
         let raiseGuard = tbrBelow70Pct > Self.tbrRaiseGuardPct || timeBelow54Pct >= Self.tbr54RaiseGuardPct
@@ -339,6 +366,7 @@ public enum BoostV5AutoConfigApply {
         ]
         var operative: [BoostAutoConfigKnob: Double] = [:]
         for k in BoostAutoConfigKnob.doubleKnobs { operative[k] = storedValue(k) ?? currentDefault(k) }
+        let start = operative // as stored before this run moved anything
 
         for knob in redriveKnobs {
             let current = operative[knob]!
@@ -360,7 +388,26 @@ public enum BoostV5AutoConfigApply {
                 : current + (derivedNow - baseline)
             let stepCap = abs(current) * redriveMaxStepRatio
             let bounded = min(max(rawProposed, current - stepCap), current + stepCap)
-            let proposed = (bounded * 100).rounded() / 100
+            var proposed = (bounded * 100).rounded() / 100
+            // Aggression is never auto-raised above neutral. A raise stops at 1.0, and from a value
+            // already at or above 1.0, which only the user can have set, it does not move. The
+            // baseline is not advanced, so the withheld movement stays available.
+            if knob == .aggression, proposed > current + Self.defaultEps {
+                let ceiling = max(current, Self.aggressionAutoCeiling)
+                if proposed > ceiling + Self.defaultEps {
+                    if abs(ceiling - current) <= Self.defaultEps {
+                        setPending(knob, nil)
+                        out.append(Resolution(
+                            knob: knob, outcome: .atNeutralCeiling, suggestedValue: proposed,
+                            operativeValue: current,
+                            reason: "held:neutral-ceiling raise \(current) → \(proposed) not written; " +
+                                "aggression is auto-raised no higher than \(Self.aggressionAutoCeiling)"
+                        ))
+                        continue
+                    }
+                    proposed = ceiling
+                }
+            }
             let delta = proposed - current
 
             if abs(delta) <= Self.defaultEps {
@@ -372,6 +419,21 @@ public enum BoostV5AutoConfigApply {
                     knob: knob, outcome: .insideDeadband, suggestedValue: proposed,
                     operativeValue: current,
                     reason: "no movement: derivation \(baseline) → \(derivedNow) leaves \(current) unchanged"
+                ))
+                continue
+            }
+
+            // Any insulin-adding move is held while the TBR guard is tripped: a cap or aggression
+            // rising, or hypo caution falling. Checked before the confirmation and noise filters so
+            // a held move is reported as held, and the baseline is not advanced, so the movement
+            // accumulates until the guard clears (AAPS Boost 6.3.0, audit 22).
+            let loosening = knob == .hypoCaution ? delta < 0 : delta > 0
+            if loosening, raiseGuard {
+                setPending(knob, nil)
+                out.append(Resolution(
+                    knob: knob, outcome: .suggestedNotAppliedTbr, suggestedValue: proposed,
+                    operativeValue: current,
+                    reason: "raise held: \(current) → \(proposed); TBR<70=\(tbrBelow70Pct)% <54=\(timeBelow54Pct)%"
                 ))
                 continue
             }
@@ -400,19 +462,8 @@ public enum BoostV5AutoConfigApply {
                 }
             }
 
-            // A rising hypo caution is a tightening; for the caps a rise is a loosening.
-            let loosening = knob == .hypoCaution ? delta < 0 : delta > 0
-            if loosening, doseCapKnobs.contains(knob), raiseGuard {
-                setPending(knob, nil)
-                out.append(Resolution(
-                    knob: knob, outcome: .suggestedNotAppliedTbr, suggestedValue: proposed,
-                    operativeValue: current,
-                    reason: "raise held: \(current) → \(proposed); TBR<70=\(tbrBelow70Pct)% <54=\(timeBelow54Pct)%"
-                ))
-                continue
-            }
-
             put(knob, proposed)
+            recordWritten(knob, proposed)
             // Advance the baseline by the movement ACTUALLY APPLIED, not by the movement derived.
             // When the step cap clips a large move, advancing to the newly derived value would
             // discard the remainder and strand the knob short of its target: an insulin
@@ -432,48 +483,214 @@ public enum BoostV5AutoConfigApply {
             ))
         }
 
-        // The computed knobs follow the operative caps, exactly as the derivation computes them, so
-        // they can never drift out of step with the caps they bound.
-        let currentCum = operative[.cumulativeSmbCap60Min]!
+        // The computed knobs follow the operative caps, exactly as the derivation computes them, but
+        // only while auto-config still owns them (computedKnobOwned). A value the user set is kept.
+        let cum = BoostAutoConfigKnob.cumulativeSmbCap60Min
+        let currentCum = operative[cum]!
         let newCum = BoostV5AutoConfig.cumulativeCap60Min(
             confirmedCapU: operative[.confirmedCapU]!,
             committedCapU: operative[.committedCapU]!
         )
-        if abs(newCum - currentCum) > Self.defaultEps {
+        let cumAtStart = BoostV5AutoConfig.cumulativeCap60Min(
+            confirmedCapU: start[.confirmedCapU]!, committedCapU: start[.committedCapU]!
+        )
+        let cumStored = storedValue(cum)
+        if let cumStored, !computedKnobOwned(
+            userTuned: isUserTuned(cum), stored: cumStored, lastWritten: lastWritten(cum),
+            autoValues: [cumAtStart], tolerance: Self.defaultEps
+        ) {
+            out.append(Resolution(
+                knob: cum, outcome: .keptUserTuned, suggestedValue: newCum, operativeValue: currentCum,
+                reason: "kept:user-set \(currentCum) (recomputed \(newCum) not written)"
+            ))
+        } else if abs(newCum - currentCum) > Self.defaultEps {
             if newCum > currentCum, raiseGuard {
                 out.append(Resolution(
-                    knob: .cumulativeSmbCap60Min, outcome: .suggestedNotAppliedTbr,
+                    knob: cum, outcome: .suggestedNotAppliedTbr,
                     suggestedValue: newCum, operativeValue: currentCum,
-                    reason: "raise held: \(currentCum) → \(newCum); TBR<70=\(tbrBelow70Pct)%"
+                    reason: "raise held: \(currentCum) → \(newCum); TBR<70=\(tbrBelow70Pct)% <54=\(timeBelow54Pct)%"
                 ))
             } else {
-                put(.cumulativeSmbCap60Min, newCum)
+                put(cum, newCum)
+                recordWritten(cum, newCum)
                 out.append(Resolution(
-                    knob: .cumulativeSmbCap60Min, outcome: .redriven, suggestedValue: newCum,
+                    knob: cum, outcome: .redriven, suggestedValue: newCum,
                     operativeValue: newCum,
                     reason: "recomputed \(currentCum) → \(newCum) from the operative caps"
                 ))
             }
+        } else if let cumStored, lastWritten(cum) == nil {
+            // Owned, unchanged and no record of a write yet: record it, so a later edit by the user
+            // is recognised exactly rather than by the tolerance test.
+            recordWritten(cum, cumStored)
         }
-        // The primer ceiling is a fraction of the committed cap. The fraction comes from the
-        // derivation so the hypo-prone and well-controlled policy is not duplicated here. It does
-        // not pass through the raise guard, matching the onboarding path: the primer's safety is its
-        // delivery routing rather than a cap.
+        // The primer ceiling is a fraction of the committed cap, the fraction taken from the
+        // derivation so the hypo-prone and well-controlled policy is not duplicated here.
         if suggestion.committedCapU > 0 {
+            let primer = BoostAutoConfigKnob.primerCapU
             let frac = suggestion.primerCapU / suggestion.committedCapU
-            let currentPrimer = operative[.primerCapU]!
+            let currentPrimer = operative[primer]!
             let raw = operative[.committedCapU]! * frac
             let newPrimer = (min(max(raw, 0), operative[.committedCapU]!) * 100).rounded() / 100
-            if abs(newPrimer - currentPrimer) > redrivePrimerDeadband {
-                put(.primerCapU, newPrimer)
+            let primerStored = storedValue(primer)
+            let primerAtStart = BoostV5AutoConfig.primerFractions.map { (start[.committedCapU]! * $0 * 100).rounded() / 100 }
+            let changes = abs(newPrimer - currentPrimer) > redrivePrimerDeadband
+            if let primerStored, abs(primerStored) <= Self.defaultEps {
+                // A stored 0 is the primer's only off switch, and auto-config never writes 0.
                 out.append(Resolution(
-                    knob: .primerCapU, outcome: .redriven, suggestedValue: newPrimer,
+                    knob: primer, outcome: .keptUserTuned, suggestedValue: newPrimer, operativeValue: 0,
+                    reason: "kept:user-set 0 (primer off; recomputed \(newPrimer) not written)"
+                ))
+            } else if let primerStored, !computedKnobOwned(
+                userTuned: isUserTuned(primer), stored: primerStored, lastWritten: lastWritten(primer),
+                autoValues: primerAtStart, tolerance: redrivePrimerDeadband
+            ) {
+                out.append(Resolution(
+                    knob: primer, outcome: .keptUserTuned, suggestedValue: newPrimer, operativeValue: currentPrimer,
+                    reason: "kept:user-set \(currentPrimer) (recomputed \(newPrimer) not written)"
+                ))
+            } else if changes, newPrimer > currentPrimer, raiseGuard {
+                // Onboarding does not guard the primer, so a hypo-prone person is still provisioned
+                // one for the temp-basal route; once provisioned, a larger primer waits for the guard.
+                out.append(Resolution(
+                    knob: primer, outcome: .suggestedNotAppliedTbr, suggestedValue: newPrimer,
+                    operativeValue: currentPrimer,
+                    reason: "raise held: \(currentPrimer) → \(newPrimer); TBR<70=\(tbrBelow70Pct)% <54=\(timeBelow54Pct)%"
+                ))
+            } else if changes {
+                put(primer, newPrimer)
+                recordWritten(primer, newPrimer)
+                out.append(Resolution(
+                    knob: primer, outcome: .redriven, suggestedValue: newPrimer,
                     operativeValue: newPrimer,
                     reason: "recomputed \(currentPrimer) → \(newPrimer) from the committed cap"
                 ))
+            } else if let primerStored, lastWritten(primer) == nil {
+                recordWritten(primer, primerStored)
             }
         }
         return out
+    }
+
+    // MARK: - Weekly re-evaluation of the on/off settings (AAPS Boost 6.3.0)
+
+    /// Pending-ledger entry holding the previous window's well-controlled verdict (1.0 or 0.0).
+    public static let primerRoutePrevWcKey = "primer_route_prev_well_controlled"
+    /// Written-ledger value recording that onboarding found a switch set by the user; such a switch
+    /// is never changed by re-derivation. 1.0 and 0.0 record auto-config's own true and false.
+    public static let switchUserSetMark = -1.0
+    /// Pending-ledger entry holding a switch's previous window verdict.
+    public static func switchPreviousVerdictKey(_ knob: BoostAutoConfigKnob) -> String {
+        "switch_prev_allows_\(knob.rawValue)"
+    }
+
+    public struct SwitchResolution: Equatable, Sendable {
+        public let outcome: Outcome
+        public let value: Bool
+        public let reason: String
+    }
+
+    /// The primer delivery route (true = temp basal). Not well controlled while on the bolus moves to
+    /// the temp basal at once, a tightening; well controlled while on the temp basal moves back to
+    /// the bolus, which adds insulin, only after two consecutive well-controlled windows. A stored
+    /// value that differs from auto-config's last write was set by someone else and is kept.
+    public static func resolvePrimerRoute(
+        wellControlled: Bool,
+        bgReadings: Int,
+        previousWellControlled: Bool?,
+        stored: Bool,
+        lastWritten: Bool?,
+        put: (Bool) -> Void,
+        recordWritten: (Bool) -> Void,
+        recordWellControlled: (Bool?) -> Void
+    ) -> SwitchResolution {
+        let current = stored
+        if bgReadings < BoostV5AutoConfig.minBgReadings {
+            recordWellControlled(nil)
+            return SwitchResolution(outcome: .insufficientEvidence, value: current, reason: "held:evidence bg=\(bgReadings)")
+        }
+        recordWellControlled(wellControlled)
+        if let lastWritten, stored != lastWritten {
+            return SwitchResolution(outcome: .keptUserTuned, value: current, reason: "kept:user-set tbrFallback=\(current)")
+        }
+        if !wellControlled, !current {
+            put(true)
+            recordWritten(true)
+            return SwitchResolution(outcome: .redriven, value: true, reason: "bolus to temp basal: window not well controlled")
+        }
+        if wellControlled, current, previousWellControlled == true {
+            put(false)
+            recordWritten(false)
+            return SwitchResolution(
+                outcome: .redriven, value: false, reason: "temp basal to bolus: two consecutive well-controlled windows"
+            )
+        }
+        if wellControlled, current {
+            return SwitchResolution(
+                outcome: .awaitingConfirmation, value: true,
+                reason: "held:one-window temp basal kept until a second well-controlled window"
+            )
+        }
+        return SwitchResolution(outcome: .insideDeadband, value: current, reason: "unchanged tbrFallback=\(current)")
+    }
+
+    /// An insulin-adding on/off switch (aggressive early confirm, fast-carb confirm), by the rules of
+    /// the primer route: off on the first window that does not allow it, on only after two
+    /// consecutive windows that do and never under the TBR raise guard, never over a value the user
+    /// set. Trio's preferences always hold a value, so `stored` is never absent: with no record of a
+    /// write, a value at the factory default is auto-config's and one off it is not switched on.
+    public static func resolveInsulinAddingSwitch(
+        allowsOn: Bool,
+        raiseGuard: Bool,
+        bgReadings: Int,
+        previousAllowsOn: Bool?,
+        stored: Bool,
+        defaultValue: Bool,
+        lastWritten: Bool?,
+        userMarked: Bool,
+        put: (Bool) -> Void,
+        recordWritten: (Bool) -> Void,
+        recordVerdict: (Bool?) -> Void
+    ) -> SwitchResolution {
+        let current = stored
+        if bgReadings < BoostV5AutoConfig.minBgReadings {
+            recordVerdict(nil)
+            return SwitchResolution(outcome: .insufficientEvidence, value: current, reason: "held:evidence bg=\(bgReadings)")
+        }
+        let countsTowardOn = allowsOn && !raiseGuard
+        recordVerdict(countsTowardOn)
+        if userMarked || (lastWritten != nil && stored != lastWritten) {
+            return SwitchResolution(outcome: .keptUserTuned, value: current, reason: "kept:user-set \(current)")
+        }
+        let unrecordedNonDefault = lastWritten == nil && stored != defaultValue
+        if !allowsOn, current {
+            put(false)
+            recordWritten(false)
+            return SwitchResolution(outcome: .redriven, value: false, reason: "on to off: window does not allow it")
+        }
+        if allowsOn, !current, raiseGuard {
+            return SwitchResolution(
+                outcome: .suggestedNotAppliedTbr, value: false,
+                reason: "held:tbr-guard off kept while time below range trips the guard"
+            )
+        }
+        if countsTowardOn, !current, previousAllowsOn == true {
+            if unrecordedNonDefault {
+                return SwitchResolution(
+                    outcome: .keptUserTuned, value: false,
+                    reason: "kept:unrecorded off is not switched on without a record that auto-config set it"
+                )
+            }
+            put(true)
+            recordWritten(true)
+            return SwitchResolution(outcome: .redriven, value: true, reason: "off to on: two consecutive windows allow it")
+        }
+        if countsTowardOn, !current {
+            return SwitchResolution(
+                outcome: .awaitingConfirmation, value: false, reason: "held:one-window off kept until a second window allows it"
+            )
+        }
+        return SwitchResolution(outcome: .insideDeadband, value: current, reason: "unchanged \(current)")
     }
 
     /// Auto-config persistence schema version — THE single hook future re-migrations plug into

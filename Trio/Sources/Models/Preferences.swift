@@ -75,7 +75,8 @@ struct Preferences: JSON, Equatable {
     var boostInsulinReqPct: Decimal = 50 // 30…100 %, the share of insulinReq an SMB delivers
     var boostScale: Decimal = 1.0 // 0.1…3, multiplier on basal for the UAM and acceleration tiers
     var boostPercentScale: Decimal = 200 // 50…500 %, the percent-scale factor
-    var boostEnablePercentScale: Bool = false
+    // On by default since Boost 6.3.0; a stored off stays off, as in AAPS.
+    var boostEnablePercentScale: Bool = true
     var boostAllowWithHighTt: Bool = false // keep Boost active under a high temp target
     // V5 tuning knobs (ranges match AAPS).
     var boostV5Aggression: Decimal = 1.0 // 0.7…1.6 — scales CONFIRMED dose

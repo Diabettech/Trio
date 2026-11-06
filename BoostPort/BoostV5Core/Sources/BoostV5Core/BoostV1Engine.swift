@@ -362,6 +362,10 @@ public enum V1EngineError: Error, Equatable {
 }
 
 public enum BoostV1Engine {
+    /// Appended to the reason by every zero temp V1 sets for a low. The V6 override reads it and
+    /// leaves the cycle to V1, so no meal-state SMB lands on a cycle V1 suspended (DetermineBasalBoost
+    /// LOW_SUSPEND_TAG, Boost 6.3.0).
+    public static let lowSuspendTag = "lowSuspend=1; "
     /// Post-rescue window threshold (mg/dL) for the 45-min rolling minimum (DetermineBasalBoost
     /// POST_RESCUE_LOW_THRESHOLD_MGDL), shared with the V6 seam's post-rescue cap.
     public static let postRescueLowThresholdMgdl = 75.0
@@ -547,6 +551,36 @@ public enum BoostV1Engine {
             rT.duration = duration
             rT.rate = suggestedRate
         }
+    }
+
+    /// The low-glucose zero temp, tagged with `lowSuspendTag` (DetermineBasalBoost lowSuspendTempBasal).
+    static func lowSuspendTempBasal(_ duration: Int, _ p: V1Profile, _ rT: inout V1Result, _ currentTemp: V1CurrentTemp) {
+        rT.reason += lowSuspendTag
+        setTempBasal(0.0, duration, p, &rT, currentTemp)
+    }
+
+    /// A low temp from the eventualBG-below-target branch; at a rate of zero or less it is a zero
+    /// temp for a low and is tagged (DetermineBasalBoost lowTempBasal).
+    static func lowTempBasal(
+        _ rate: Double,
+        _ duration: Int,
+        _ p: V1Profile,
+        _ rT: inout V1Result,
+        _ currentTemp: V1CurrentTemp
+    ) {
+        if rate <= 0 { lowSuspendTempBasal(duration, p, &rT, currentTemp) }
+        else { setTempBasal(rate, duration, p, &rT, currentTemp) }
+    }
+
+    /// The threshold drop to 65 on an accelerating rise (BoostV1SafetyRules boostAccelLoweredThreshold,
+    /// Boost 6.3.0). It needs a rising delta, since deltaAccl is also positive on a slowing fall, and
+    /// never goes below the LGS setting.
+    static func boostAccelLoweredThreshold(
+        _ threshold: Double, delta: Double, shortAvgDelta: Double, lgsThreshold: Int?
+    ) -> Double {
+        let accelerating = abs(shortAvgDelta) > 0.001 && delta > shortAvgDelta
+        guard accelerating, delta > 0 else { return threshold }
+        return Swift.max(65.0, Double(lgsThreshold ?? 0))
     }
 
     static func appendReason(_ rT: inout V1Result, _ msg: String) {
@@ -756,9 +790,9 @@ public enum BoostV1Engine {
         if let lgs = profile.lgsThreshold, Double(lgs) > threshold {
             threshold = Double(lgs)
         }
-        if deltaAccl > 0 {
-            threshold = 65.0
-        }
+        threshold = boostAccelLoweredThreshold(
+            threshold, delta: gs.delta, shortAvgDelta: gs.shortAvgDelta, lgsThreshold: profile.lgsThreshold
+        )
 
         rT = V1Result()
         rT.bg = bg
@@ -1083,7 +1117,7 @@ public enum BoostV1Engine {
 
         // Low glucose suspend (Boost compares IOB with -40 min of basal)
         if bg < threshold, iobData.iob < -profile.currentBasal * 40 / 60, minDelta > 0, minDelta > expectedDelta {
-            rT.reason += "IOB \(fmt(iobData.iob)) < \(fmt(round(-profile.currentBasal * 20 / 60, 2)))"
+            rT.reason += "IOB \(fmt(iobData.iob)) < \(fmt(round(-profile.currentBasal * 40 / 60, 2)))"
             rT.reason += " and minDelta \(fmt(minDelta)) > expectedDelta \(fmt(expectedDelta)); "
         } else if bg < threshold || minGuardBG < threshold {
             rT.reason += "minGuardBG \(fmt(minGuardBG)) (\(minGuardBGSource)) < \(fmt(threshold))"
@@ -1092,7 +1126,7 @@ public enum BoostV1Engine {
             var durationReq = try roundInt(60 * worstCaseInsulinReq / profile.currentBasal)
             durationReq = try roundInt(Double(durationReq) / 30.0) * 30
             durationReq = Swift.min(120, Swift.max(30, durationReq))
-            setTempBasal(0.0, durationReq, profile, &rT, currenttemp)
+            lowSuspendTempBasal(durationReq, profile, &rT, currenttemp)
             return finish(rT, console)
         }
 
@@ -1110,7 +1144,7 @@ public enum BoostV1Engine {
             if minDelta > expectedDelta, minDelta > 0, carbsReq == 0 {
                 if naiveEventualBG < 40 {
                     rT.reason += ", naive_eventualBG < 40. "
-                    setTempBasal(0.0, 30, profile, &rT, currenttemp)
+                    lowSuspendTempBasal(30, profile, &rT, currenttemp)
                     return finish(rT, console)
                 }
                 if gs.delta > minDelta {
@@ -1141,7 +1175,7 @@ public enum BoostV1Engine {
             let minInsulinReq = jmin(insulinReq, naiveInsulinReq)
             if insulinScheduled < minInsulinReq - basal * 0.3 {
                 rT.reason += ", \(currenttemp.duration)m@\(fmt(currenttemp.rate)) is a lot less than needed. "
-                setTempBasal(rate, 30, profile, &rT, currenttemp)
+                lowTempBasal(rate, 30, profile, &rT, currenttemp)
                 return finish(rT, console)
             }
             if currenttemp.duration > 5, rate >= currenttemp.rate * 0.8 {
@@ -1160,13 +1194,14 @@ public enum BoostV1Engine {
                     }
                     if durationReq > 0 {
                         rT.reason += ", setting \(durationReq)m zero temp. "
-                        setTempBasal(rate, durationReq, profile, &rT, currenttemp)
+                        // rate <= 0 here, and setTempBasal floors it at 0
+                        lowSuspendTempBasal(durationReq, profile, &rT, currenttemp)
                         return finish(rT, console)
                     }
                 } else {
                     rT.reason += ", setting \(fmt(round(rate, 2)))U/hr. "
                 }
-                setTempBasal(rate, 30, profile, &rT, currenttemp)
+                lowTempBasal(rate, 30, profile, &rT, currenttemp)
                 return finish(rT, console)
             }
         }
