@@ -206,11 +206,6 @@ enum BoostV1Determination {
             smbMinutes = trioCustomOrefVariables.smbMinutes
             uamMinutes = trioCustomOrefVariables.uamMinutes
         }
-        // Boost 6.3.0 holds these at no more than 15 and 20 minutes and never raises them (AAPS
-        // BoostV5AutoConfigApply.smbBasalMinutesCeilings). AAPS lowers the stored settings; here they are
-        // clamped where only Boost-active dosing reads them, so stock Trio keeps the user's values.
-        smbMinutes = min(smbMinutes, 15)
-        uamMinutes = min(uamMinutes, 20)
 
         let gate = boostActive(profile: profile, preferences: preferences, clock: currentTime)
 

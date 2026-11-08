@@ -304,6 +304,26 @@ public enum BoostV5AutoConfigApply {
     /// 1.0 set by hand is kept and may still be lowered (AAPS Boost 6.3.0 AGGRESSION_AUTO_CEILING).
     public static let aggressionAutoCeiling = 1.0
 
+    /// Boost's starting values for the two "max minutes of basal to limit SMB" settings, 15 for the
+    /// standard one and 20 for UAM (AAPS Boost 6.3.2 `smbBasalMinutesSeeds`). They size every
+    /// microbolus V6 does not size itself. Written once, when Boost first runs, and then left to the
+    /// person; 6.3.0 and 6.3.1 held them at or below these values on every cycle instead.
+    public static let smbBasalMinutesSeeds = (smb: 15.0, uam: 20.0)
+
+    /// The values to write on Boost's first run, nil for a setting to leave alone: the seed for any
+    /// value above it. AAPS writes a seed only where nothing is stored, but its 6.3.0 ceiling had
+    /// already lowered every stored value above the seeds, so an AAPS install reaches 6.3.2 at or
+    /// below them. Trio's 6.3.0 clamp acted at read time and left the stored values as they were,
+    /// so lowering them once reproduces that state and doses no more than the clamp did. Trio's
+    /// default of 30 is above both seeds, so a setting never changed by hand is seeded as in AAPS.
+    public static func seedSmbBasalMinutes(
+        smb: Double, uam: Double, alreadySeeded: Bool
+    ) -> (smb: Double?, uam: Double?) {
+        guard !alreadySeeded else { return (nil, nil) }
+        func seed(_ v: Double, _ to: Double) -> Double? { v > to + defaultEps ? to : nil }
+        return (seed(smb, smbBasalMinutesSeeds.smb), seed(uam, smbBasalMinutesSeeds.uam))
+    }
+
     /// Whether a computed knob (the cumulative cap, the primer cap) is still auto-config's to
     /// recompute (AAPS computedKnobOwned, Boost 6.3.0). A value at a factory default is
     /// auto-config's, as is the value auto-config last wrote. Installs with no record of a write

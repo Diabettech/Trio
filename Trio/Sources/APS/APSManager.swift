@@ -498,6 +498,8 @@ final class BaseAPSManager: APSManager, Injectable {
         // 3d9d471dbb, f393d02e55). The engine already enforces it at read time; this writes it back
         // so the settings screen shows what the engine uses.
         reconcileBoostSensitivitySettings()
+        // Before the determination, so Boost's first cycle is sized by its starting SMB minutes.
+        seedBoostSmbBasalMinutes()
 
         // One-shot: on first switch to Boost V5 active, seed the V5 knobs from the user's own prior
         // (oref) dosing history. Guarded + self-contained; never throws into the dose path.
@@ -1325,6 +1327,49 @@ final class BaseAPSManager: APSManager, Injectable {
         } catch {
             debug(.apsManager, "BoostV5 re-derivation failed (non-fatal): \(error)")
         }
+    }
+
+    /// Sets the two SMB basal-minutes settings to Boost's starting values the first time Boost is
+    /// active, where they are above them (AAPS Boost 6.3.2 `seedSmbMinutes`; see
+    /// `BoostV5AutoConfigApply.seedSmbBasalMinutes` for why above rather than unset). Once only:
+    /// afterwards they are the person's to change. Whether it has run is bookkeeping, so it
+    /// lives in UserDefaults like the other Boost stores.
+    private func seedBoostSmbBasalMinutes() {
+        var prefs = settingsManager.preferences
+        guard prefs.boostMode == .active else { return }
+        let seededKey = "boost.smbBasalMinutesSeeded"
+        let r = BoostV5AutoConfigApply.seedSmbBasalMinutes(
+            smb: Double(truncating: prefs.maxSMBBasalMinutes as NSNumber),
+            uam: Double(truncating: prefs.maxUAMSMBBasalMinutes as NSNumber),
+            alreadySeeded: UserDefaults.standard.bool(forKey: seededKey)
+        )
+        UserDefaults.standard.set(true, forKey: seededKey)
+        var written: [String] = []
+        if let v = r.smb { prefs.maxSMBBasalMinutes = Decimal(v)
+            written.append("standard \(Int(v))") }
+        if let v = r.uam { prefs.maxUAMSMBBasalMinutes = Decimal(v)
+            written.append("UAM \(Int(v))") }
+        guard !written.isEmpty else { return }
+        settingsManager.preferences = prefs // persists + notifies via SettingsManager.didSet
+
+        let what = written.joined(separator: "; ") + " minutes of basal"
+        debug(.apsManager, "Boost SMB basal minutes set to Boost's starting values: \(what)")
+        let content = Alert.Content(
+            title: String(localized: "Boost SMB limits"),
+            body: "Boost set the largest microbolus to its starting values: \(what). You can change them in the SMB settings.",
+            acknowledgeActionButtonLabel: String(localized: "OK")
+        )
+        trioAlertManager.issueAlert(Alert(
+            identifier: Alert.Identifier(
+                managerIdentifier: "trio.boost",
+                alertIdentifier: "boost.smbBasalMinutesSeed"
+            ),
+            foregroundContent: content,
+            backgroundContent: content,
+            trigger: .immediate,
+            interruptionLevel: .active,
+            sound: nil
+        ))
     }
 
     /// Writes the result of `DynIsf.reconcileSensitivitySettings` back to preferences (AAPS
