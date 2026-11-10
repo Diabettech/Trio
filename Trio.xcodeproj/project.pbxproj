@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		4E4743000000000000000002 /* NextGenCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4E4743000000000000000001 /* NextGenCore.xcframework */; };
+		4E4743000000000000000004 /* NextGenCoreLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E4743000000000000000003 /* NextGenCoreLinkTests.swift */; };
 		041D1E995A6AE92E9289DC49 /* TreatmentsDataFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8D1A7CA8C10C4403D4BBFA7 /* TreatmentsDataFlow.swift */; };
 		0B426FFA7AAB28BA084E040F /* MealHypothesis.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE9DA82D44166E0A9570DE7F /* MealHypothesis.swift */; };
 		0D9A5E34A899219C5C4CDFAF /* HistoryStateModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9455FA2D92E77A6C4AFED8A3 /* HistoryStateModel.swift */; };
@@ -1149,6 +1150,7 @@
 
 /* Begin PBXFileReference section */
 		4E4743000000000000000001 /* NextGenCore.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = NextGenCore.xcframework; path = ../nextgen-aid/core/build/XCFrameworks/release/NextGenCore.xcframework; sourceTree = SOURCE_ROOT; };
+		4E4743000000000000000003 /* NextGenCoreLinkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NextGenCoreLinkTests.swift; sourceTree = "<group>"; };
 		07D55CABFDA29819F3083458 /* BoostV5AutoConfigApply.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BoostV5AutoConfigApply.swift; path = BoostPort/BoostV5Core/Sources/BoostV5Core/BoostV5AutoConfigApply.swift; sourceTree = "<group>"; };
 		10E61A0885164081B57C357C /* NightscoutUploadSerializer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NightscoutUploadSerializer.swift; sourceTree = "<group>"; };
 		110AEDE02C5193D100615CC9 /* BolusIntent.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = BolusIntent.swift; sourceTree = "<group>"; };
@@ -3303,6 +3305,7 @@
 		38FCF3EE25E9028E0078B0D1 /* TrioTests */ = {
 			isa = PBXGroup;
 			children = (
+				4E4743000000000000000003 /* NextGenCoreLinkTests.swift */,
 				DDDD0FFD2F4E231600F9C645 /* Mocks */,
 				DDDD0FFA2F4E22C000F9C645 /* GlucoseSmoothingTests.swift */,
 				DDDD0FFC2F4E22C000F9C645 /* GlucoseNativeConversionTests.swift */,
@@ -6155,6 +6158,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4E4743000000000000000004 /* NextGenCoreLinkTests.swift in Sources */,
 				3B5CD2C92D4AECD500CE213C /* ProfileCarbsTests.swift in Sources */,
 				3BEDC9932EEB27B600AC6492 /* IobConsecutiveEventsTests.swift in Sources */,
 				3B1DB90F2E63C14C00BD814B /* DetermineBasalLowEventualGlucoseTests.swift in Sources */,
