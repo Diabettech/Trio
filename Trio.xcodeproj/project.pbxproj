@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		4E4743000000000000000002 /* NextGenCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4E4743000000000000000001 /* NextGenCore.xcframework */; };
 		041D1E995A6AE92E9289DC49 /* TreatmentsDataFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8D1A7CA8C10C4403D4BBFA7 /* TreatmentsDataFlow.swift */; };
 		0B426FFA7AAB28BA084E040F /* MealHypothesis.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE9DA82D44166E0A9570DE7F /* MealHypothesis.swift */; };
 		0D9A5E34A899219C5C4CDFAF /* HistoryStateModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9455FA2D92E77A6C4AFED8A3 /* HistoryStateModel.swift */; };
@@ -1147,6 +1148,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		4E4743000000000000000001 /* NextGenCore.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = NextGenCore.xcframework; path = ../nextgen-aid/core/build/XCFrameworks/release/NextGenCore.xcframework; sourceTree = SOURCE_ROOT; };
 		07D55CABFDA29819F3083458 /* BoostV5AutoConfigApply.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BoostV5AutoConfigApply.swift; path = BoostPort/BoostV5Core/Sources/BoostV5Core/BoostV5AutoConfigApply.swift; sourceTree = "<group>"; };
 		10E61A0885164081B57C357C /* NightscoutUploadSerializer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NightscoutUploadSerializer.swift; sourceTree = "<group>"; };
 		110AEDE02C5193D100615CC9 /* BolusIntent.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = BolusIntent.swift; sourceTree = "<group>"; };
@@ -2188,6 +2190,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4E4743000000000000000002 /* NextGenCore.xcframework in Frameworks */,
 				CE95BF632BA771BE00DC3DE3 /* LoopTestingKit.framework in Frameworks */,
 				3B4BA7722D8DBD690069D5B8 /* G7SensorKitUI.framework in Frameworks */,
 				3B4BA7742D8DBD690069D5B8 /* LibreTransmitter.framework in Frameworks */,
@@ -2849,6 +2852,7 @@
 		3818AA48274C267000843DB3 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				4E4743000000000000000001 /* NextGenCore.xcframework */,
 				3E5308A43002BC970075629E /* AccuChekKit.framework */,
 				B6E925122EB3932A0076D719 /* OmnipodKit.framework */,
 				3E54EF2B2E476DA40006F54D /* MedtrumKit.framework */,
