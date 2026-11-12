@@ -308,7 +308,7 @@ public enum SleepStateDetector {
         // Boost 6.3.0 pre-window hold (AAPS f88e53ba52, c361734560): SLEEPING is held from the start of
         // candidacy, 90 min before nightStart, so a sleep detected early is not ended as "boundary" on
         // the next cycle. Trio has no lie-in merge, so the hold ends at nightEnd.
-        let inHoldWindow = minuteInWrappedRange(inputs.nowMinuteOfDay, sleepCandStart, inputs.nightEndMinute)
+        let inHoldWindow = inSleepCandidateWindow
         let inPreWindow = minuteInWrappedRange(inputs.nowMinuteOfDay, sleepCandStart, inputs.nightStartMinute)
 
         var newState = state

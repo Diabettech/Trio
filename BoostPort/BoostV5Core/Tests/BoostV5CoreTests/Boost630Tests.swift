@@ -195,8 +195,11 @@ final class Boost630Tests: XCTestCase {
 
     func testPrimerRouteTightensAtOnceAndLoosensAfterTwoWindows() {
         XCTAssertEqual(route(wc: false, prev: nil, stored: false).1, true)
-        XCTAssertEqual(route(wc: true, prev: nil, stored: true).0.outcome, .awaitingConfirmation)
-        XCTAssertEqual(route(wc: true, prev: true, stored: true).1, false)
+        XCTAssertEqual(route(wc: true, prev: nil, stored: true, lastWritten: true).0.outcome, .awaitingConfirmation)
+        XCTAssertEqual(route(wc: true, prev: true, stored: true, lastWritten: true).1, false)
+        // A temp basal auto-config has no record of writing may be the person's: never moved to the bolus.
+        XCTAssertEqual(route(wc: true, prev: true, stored: true).1, true)
+        XCTAssertEqual(route(wc: true, prev: true, stored: true).0.outcome, .keptUserTuned)
         XCTAssertEqual(route(wc: false, prev: nil, stored: false, bg: 100).0.outcome, .insufficientEvidence)
         XCTAssertEqual(route(wc: false, prev: nil, stored: false, lastWritten: true).0.outcome, .keptUserTuned)
     }

@@ -509,7 +509,11 @@ final class BaseAPSManager: APSManager, Injectable {
         // deliberately: the derivation reads a month of glucose and pump history, and nothing that
         // large belongs on the dose path. AAPS moved it off for the same reason. A failure is
         // swallowed, so it can never affect this cycle.
-        if settingsManager.preferences.boostMode == .active, BoostRedriveStore.isDue(now: Date()) {
+        // Not while onboarding still owns a knob (AAPS maybeRedrive ONBOARDING_INCOMPLETE): a switch
+        // re-derivation wrote would otherwise read to onboarding as set by the person, and freeze.
+        let onboardingDone = BoostAutoConfigKnob.allCases
+            .allSatisfy { settingsManager.preferences.boostV5AutoConfigResolved.contains($0.rawValue) }
+        if settingsManager.preferences.boostMode == .active, onboardingDone, BoostRedriveStore.isDue(now: Date()) {
             Task.detached(priority: .utility) { [weak self] in
                 await self?.redriveBoostAutoConfig()
             }

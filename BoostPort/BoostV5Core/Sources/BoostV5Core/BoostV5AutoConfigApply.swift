@@ -614,6 +614,9 @@ public enum BoostV5AutoConfigApply {
     /// the temp basal at once, a tightening; well controlled while on the temp basal moves back to
     /// the bolus, which adds insulin, only after two consecutive well-controlled windows. A stored
     /// value that differs from auto-config's last write was set by someone else and is kept.
+    /// Trio-specific: the move back to the bolus also needs a record that auto-config wrote the
+    /// temp basal. AAPS takes an unrecorded value as its own because it has no screen entry for the
+    /// route; Trio's settings have one, so an unrecorded temp basal may be the person's choice.
     public static func resolvePrimerRoute(
         wellControlled: Bool,
         bgReadings: Int,
@@ -637,6 +640,9 @@ public enum BoostV5AutoConfigApply {
             put(true)
             recordWritten(true)
             return SwitchResolution(outcome: .redriven, value: true, reason: "bolus to temp basal: window not well controlled")
+        }
+        if wellControlled, current, lastWritten != true {
+            return SwitchResolution(outcome: .keptUserTuned, value: true, reason: "kept:unrecorded tbrFallback=true")
         }
         if wellControlled, current, previousWellControlled == true {
             put(false)
