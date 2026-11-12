@@ -18,12 +18,13 @@ import Foundation
 ///     no fresh HR sample for ≥ droughtThresholdMin AND steps15min < 50 AND meal < 0.30/nil.
 ///
 /// Exit SLEEPING (to AWAKE):
-///   - clock exits the outer night window (hard morning exit), OR
+///   - clock leaves the hold window, which runs to nightEnd plus the lie-in (hard morning exit), OR
 ///   - transmission-resume wake: ≥3 fresh HR samples arrive after a ≥droughtThresholdMin drought
 ///     (no hysteresis), OR
 ///   - avgHr > restingHr × 1.25 AND steps15min ≥ 100, sustained ≥ wakeHrHysteresisMin.
 ///
-/// PRE_SLEEP → AWAKE when clock leaves both the pre-sleep and outer night windows.
+/// PRE_SLEEP → AWAKE when clock leaves both the pre-sleep and outer night windows, or at once on
+/// 60-min step growth at the sleep-in steps threshold.
 public enum SleepState: String, Codable, Sendable {
     case awake
     case preSleep
@@ -243,6 +244,11 @@ public struct SleepDetectorInputs {
     /// AAPS 5f7a481f28) — the wear bridge delivers steps in batches invisible to the phone-bucket
     /// `steps15min`. -1 = unavailable (legacy 15-min-bucket wake evidence only).
     public var stepsToday: Int
+    /// The morning lie-in (AAPS 3111f79ee2, live in Boost 6.3.2): SLEEPING is held this many minutes
+    /// past nightEnd, and 60-min step growth at `sleepInStepsThreshold` (the sleep-in steps setting)
+    /// ends it. 0 disables the hold. A threshold of 0 falls back to `wakeStepStrongThreshold`.
+    public var sleepInStepsThreshold: Int
+    public var sleepInWindowMin: Int
 
     public init(
         hrReadings: [SleepHrReading],
@@ -260,7 +266,9 @@ public struct SleepDetectorInputs {
         mlMealLikely: Double?,
         nowMs: Double,
         autoBySleep: Bool,
-        stepsToday: Int = -1
+        stepsToday: Int = -1,
+        sleepInStepsThreshold: Int = 0,
+        sleepInWindowMin: Int = 0
     ) {
         self.hrReadings = hrReadings
         self.hrWindowMinutes = hrWindowMinutes
@@ -278,6 +286,8 @@ public struct SleepDetectorInputs {
         self.nowMs = nowMs
         self.autoBySleep = autoBySleep
         self.stepsToday = stepsToday
+        self.sleepInStepsThreshold = sleepInStepsThreshold
+        self.sleepInWindowMin = sleepInWindowMin
     }
 }
 
@@ -307,9 +317,17 @@ public enum SleepStateDetector {
         _ = inOuterWindow // retained for readability; candidacy now keys on inSleepCandidateWindow
         // Boost 6.3.0 pre-window hold (AAPS f88e53ba52, c361734560): SLEEPING is held from the start of
         // candidacy, 90 min before nightStart, so a sleep detected early is not ended as "boundary" on
-        // the next cycle. Trio has no lie-in merge, so the hold ends at nightEnd.
-        let inHoldWindow = inSleepCandidateWindow
+        // the next cycle. The lie-in (AAPS 3111f79ee2) carries the hold past nightEnd to lieInEnd, so
+        // the boundary exit moves there; a new sleep still cannot start after nightEnd.
+        let lieInEnd = inputs.sleepInWindowMin > 0
+            ? (inputs.nightEndMinute + inputs.sleepInWindowMin) % C.minutesPerDay : inputs.nightEndMinute
+        let inHoldWindow = minuteInWrappedRange(inputs.nowMinuteOfDay, sleepCandStart, lieInEnd)
         let inPreWindow = minuteInWrappedRange(inputs.nowMinuteOfDay, sleepCandStart, inputs.nightStartMinute)
+        let inLieIn = inputs.sleepInWindowMin > 0 &&
+            minuteInWrappedRange(inputs.nowMinuteOfDay, inputs.nightEndMinute, lieInEnd)
+        // One threshold for every steps-alone route, as in AAPS since 3111f79ee2 and 68ec1e2603.
+        let strongStepsThreshold = inputs.sleepInStepsThreshold > 0
+            ? inputs.sleepInStepsThreshold : C.wakeStepStrongThreshold
 
         var newState = state
 
@@ -375,10 +393,8 @@ public enum SleepStateDetector {
         // core night it now needs step evidence. From sleepScheduleToleranceMin before the scheduled
         // wake it still wakes on the burst alone: the burst that answers a morning wake often lands
         // before the steps do, and it consumes the drought, so a later step lump would find no burst
-        // to confirm. The Kotlin also exempts the lie-in, because AAPS 3111f79ee2 holds SLEEPING
-        // through it. This detector exits SLEEPING at the night end, where the lie-in begins, so the
-        // two never coincide and that clause has nothing to act on here.
-        let resumeCorroborated = nearScheduledWake ||
+        // to confirm. The same holds through the lie-in.
+        let resumeCorroborated = nearScheduledWake || inLieIn ||
             inputs.steps15min >= C.resumeWakeMinSteps || stepsInLookback >= C.resumeWakeMinSteps
         let transmissionResumeWake = resumeBurst && resumeCorroborated
 
@@ -418,8 +434,19 @@ public enum SleepStateDetector {
             }
 
         case .preSleep:
+            // Clear activity ends PRE_SLEEP at any hour (AAPS 68ec1e2603): it is not confirmed sleep,
+            // and without this someone up at 05:00 stayed in it, under night-mode SMB rules, until
+            // the clock. Not a sleep-to-wake, so no wake reason and nothing for the learner.
+            if stepsInLookback >= strongStepsThreshold {
+                newState = SleepDetectorState(
+                    state: .awake, enteredAtMs: inputs.nowMs,
+                    lastFreshHrSampleMs: newState.lastFreshHrSampleMs,
+                    stepSamples: newState.stepSamples, hrHighStreak: newState.hrHighStreak
+                )
+                transitioned = true
+            }
             // Exit if we've left both the outer night window and the pre-sleep window (morning exit).
-            if !inOuterWindow, !inPreSleep {
+            else if !inOuterWindow, !inPreSleep {
                 newState = SleepDetectorState(
                     state: .awake, enteredAtMs: inputs.nowMs,
                     lastFreshHrSampleMs: newState.lastFreshHrSampleMs,
@@ -475,17 +502,19 @@ public enum SleepStateDetector {
                 let hrAboveWakeFloor = avgHr != nil && avgHr! > wakeFloor &&
                     newState.hrHighStreak >= C.wakeHrSustainCycles
                 // Rule 1 (gentle): HR-rise + steps, trusted ONLY within sleepScheduleToleranceMin of
-                // scheduled wake (earlier HR rises are REM/restlessness) → reason "hr_steps".
-                let gentleWake = stepsConfirmWake && hrAboveWakeFloor && nearScheduledWake
+                // scheduled wake and through the lie-in (earlier HR rises are REM/restlessness)
+                // → reason "hr_steps".
+                let gentleWake = stepsConfirmWake && hrAboveWakeFloor && (nearScheduledWake || inLieIn)
                 // Rule 2 (strong steps-alone): clear sustained getting-up movement wakes WITHOUT HR,
                 // but ONLY when the feed is unreliable (drought established, can't corroborate). When
                 // HR is live the gentle rule governs and steps-alone must NOT wake (both-required
                 // guard preserved). Safety net for HR-death nights + the 2026-07-03 over-sleep lump.
                 // Also in the 90 min before nightEnd, where the HR streak often fails while someone is
                 // up and walking; there it needs 100 steps in the last 15 min, so a batched upload of
-                // older steps does not wake (AAPS 1d09463b40).
-                let strongStepsWake = stepsInLookback >= C.wakeStepStrongThreshold &&
-                    (droughtEstablished || (nearScheduledWake && inputs.steps15min >= C.wakeStepThreshold))
+                // older steps does not wake (AAPS 1d09463b40). Anywhere in the lie-in it needs no HR:
+                // past the alarm, movement means up.
+                let strongStepsWake = stepsInLookback >= strongStepsThreshold &&
+                    (droughtEstablished || inLieIn || (nearScheduledWake && inputs.steps15min >= C.wakeStepThreshold))
                 // Pre-window wake routes (AAPS c361734560). With HR live and the clock far from the
                 // scheduled wake none of the routes above can fire, so a sleep held from the pre-window
                 // could not end before the night. Steps count from the SLEEPING entry, not the 60-min
@@ -498,7 +527,7 @@ public enum SleepStateDetector {
                         lookbackMin: min(max(sinceEntryMin, 0), C.wakeStepLookbackMin)
                     )
                 }()
-                let preWindowStepsWake = inPreWindow && stepsSinceEntry >= C.wakeStepStrongThreshold
+                let preWindowStepsWake = inPreWindow && stepsSinceEntry >= strongStepsThreshold
                 let preWindowHrWake = inPreWindow && hrAboveWakeFloor &&
                     (inputs.steps15min >= C.wakeStepFloor || stepsSinceEntry >= C.wakeStepThreshold)
                 if gentleWake || strongStepsWake || preWindowStepsWake || preWindowHrWake {

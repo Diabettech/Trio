@@ -197,7 +197,10 @@ final class BaseBoostActivityMonitor: BoostActivityMonitor, Injectable {
                 mlMealLikely: nil,
                 nowMs: nowMs,
                 autoBySleep: prefs.boostNightModeAutoBySleep,
-                stepsToday: stepsTodayCumulative
+                stepsToday: stepsTodayCumulative,
+                // The lie-in hold, as AAPS passes it since Boost 6.3.2.
+                sleepInStepsThreshold: Int(d(prefs.boostSleepInSteps)),
+                sleepInWindowMin: Int(d(prefs.boostSleepInHours) * 60)
             ),
             prev?.sleepState ?? SleepDetectorState(state: .awake, enteredAtMs: nowMs)
         )

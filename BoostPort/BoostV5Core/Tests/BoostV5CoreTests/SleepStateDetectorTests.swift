@@ -25,7 +25,9 @@ final class SleepStateDetectorTests: XCTestCase {
         mlMealLikely: Double? = nil,
         nowMs: Double,
         autoBySleep: Bool = true,
-        stepsToday: Int = -1
+        stepsToday: Int = -1,
+        sleepInStepsThreshold: Int = 0,
+        sleepInWindowMin: Int = 0
     ) -> SleepDetectorInputs {
         let readings = hrReadings ?? (
             avgHeartRate > 0
@@ -48,11 +50,119 @@ final class SleepStateDetectorTests: XCTestCase {
             mlMealLikely: mlMealLikely,
             nowMs: nowMs,
             autoBySleep: autoBySleep,
-            stepsToday: stepsToday
+            stepsToday: stepsToday,
+            sleepInStepsThreshold: sleepInStepsThreshold,
+            sleepInWindowMin: sleepInWindowMin
         )
     }
 
     private let minute = 60000.0
+
+    // MARK: Lie-in hold (AAPS 3111f79ee2, live in Boost 6.3.2) and the PRE_SLEEP activity exit
+
+    /// Four fresh samples a cycle, so the feed is live and no drought is established.
+    private func liveHr(_ at: Double, bpm: Double = 55) -> [SleepHrReading] {
+        (1 ... 4).map { SleepHrReading(timestampMs: at - Double($0) * minute, beatsPerMinute: bpm, durationMs: 60000) }
+    }
+
+    /// One cycle with a 200-step threshold and a 2 h lie-in after the 07:00 night end, as in the Kotlin
+    /// SleepLumpWakeTest.cycleLieIn.
+    private func lieInCycle(
+        _ s: SleepDetectorState, now: Double, minuteOfDay: Int, bpm: Double = 55, stepsToday: Int, steps15: Int = 0
+    ) -> SleepDetectorState {
+        D.step(makeInputs(
+            hrReadings: liveHr(now, bpm: bpm), steps15min: steps15, nowMinuteOfDay: minuteOfDay, nowMs: now,
+            stepsToday: stepsToday, sleepInStepsThreshold: 200, sleepInWindowMin: 120
+        ), s)
+    }
+
+    private let lieInT0 = 1_000_000_000_000.0
+    private func asleepAtNightEnd() -> SleepDetectorState {
+        SleepDetectorState(state: .sleeping, enteredAtMs: lieInT0 - 4 * 3_600_000, lastFreshHrSampleMs: lieInT0 - minute)
+    }
+
+    func testLieInHoldsSleepingPastNightEndWhenStepsStayLow() {
+        var s = asleepAtNightEnd()
+        for c in 0 ..< 6 { // 07:05 to 07:30
+            s = lieInCycle(s, now: lieInT0 + Double(c) * 5 * minute, minuteOfDay: 425 + c * 5, stepsToday: 100)
+            XCTAssertEqual(s.state, .sleeping, "cycle \(c)")
+        }
+    }
+
+    func testLieInReleasesOnStepsAtTheSleepInThreshold() {
+        // 220 and 230 steps over the hour: above the 200 setting, below the fixed 250.
+        var s = asleepAtNightEnd()
+        for (c, steps) in [100, 320, 330].enumerated() {
+            s = lieInCycle(s, now: lieInT0 + Double(c) * 5 * minute, minuteOfDay: 425 + c * 5, stepsToday: steps)
+            if s.state == .awake { break }
+        }
+        XCTAssertEqual(s.state, .awake)
+        XCTAssertEqual(s.wakeReason, "steps")
+    }
+
+    func testLieInEndsAtTheHardBoundary() {
+        // 09:01, past the 07:00 night end plus 2 h
+        let s = lieInCycle(asleepAtNightEnd(), now: lieInT0, minuteOfDay: 541, stepsToday: 0)
+        XCTAssertEqual(s.state, .awake)
+        XCTAssertEqual(s.wakeReason, "boundary")
+    }
+
+    func testHrAndStepsWakeTrustedInTheLieIn() {
+        // 08:00, an hour past night end and outside the 90-min grace before it: HR above the 75 bpm
+        // wake floor with 120 steps in 15 min, below the 200-step steps-alone threshold.
+        var s = asleepAtNightEnd()
+        for c in 0 ..< 4 {
+            s = lieInCycle(
+                s, now: lieInT0 + Double(c) * 5 * minute, minuteOfDay: 480 + c * 5, bpm: 85,
+                stepsToday: 100 + c * 40, steps15: 120
+            )
+            if s.state == .awake { break }
+        }
+        XCTAssertEqual(s.state, .awake)
+        XCTAssertEqual(s.wakeReason, "hr_steps")
+    }
+
+    func testResumeBurstWakesWithoutStepsInTheLieIn() {
+        // 08:00, last reliable sample 40 min ago, then a burst of four with no steps.
+        let s = SleepDetectorState(
+            state: .sleeping,
+            enteredAtMs: lieInT0 - 8 * 3_600_000,
+            lastFreshHrSampleMs: lieInT0 - 40 * minute
+        )
+        let r = lieInCycle(s, now: lieInT0, minuteOfDay: 480, stepsToday: 0)
+        XCTAssertEqual(r.state, .awake)
+        XCTAssertEqual(r.wakeReason, "resume")
+    }
+
+    func testNoLieInWithoutAWindowLeavesTheNightEndExit() {
+        let s = D.step(makeInputs(
+            hrReadings: liveHr(lieInT0), nowMinuteOfDay: 425, nowMs: lieInT0, stepsToday: 0, sleepInStepsThreshold: 200
+        ), asleepAtNightEnd())
+        XCTAssertEqual(s.state, .awake)
+        XCTAssertEqual(s.wakeReason, "boundary")
+    }
+
+    func testPreSleepReleasesToAwakeOnClearActivity() {
+        // 05:00, still PRE_SLEEP: 220 steps in the hour clears the 200 setting (not the fixed 250),
+        // so AWAKE at once, with no wake reason for the learner.
+        var s = SleepDetectorState(state: .preSleep, enteredAtMs: lieInT0 - 6 * 3_600_000)
+        s = lieInCycle(s, now: lieInT0, minuteOfDay: 300, bpm: 85, stepsToday: 1000)
+        XCTAssertEqual(s.state, .preSleep)
+        s = lieInCycle(s, now: lieInT0 + 5 * minute, minuteOfDay: 305, bpm: 85, stepsToday: 1220)
+        XCTAssertEqual(s.state, .awake)
+        XCTAssertNil(s.wakeReason)
+    }
+
+    func testPreWindowStepsWakeUsesTheSleepInSetting() {
+        // SLEEPING entered at 21:00, before the 22:00 night start; 220 steps since entry.
+        var s = SleepDetectorState(state: .sleeping, enteredAtMs: lieInT0 - minute, lastFreshHrSampleMs: lieInT0 - minute)
+        for (c, steps) in [100, 320, 330].enumerated() {
+            s = lieInCycle(s, now: lieInT0 + Double(c) * 5 * minute, minuteOfDay: 1260 + c * 5, stepsToday: steps)
+            if s.state == .awake { break }
+        }
+        XCTAssertEqual(s.state, .awake)
+        XCTAssertEqual(s.wakeReason, "pw_steps")
+    }
 
     // MARK: Boost 6.3.0 pre-window hold and steps-alone wake before night end
 

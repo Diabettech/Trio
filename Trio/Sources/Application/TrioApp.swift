@@ -174,7 +174,7 @@ extension Notification.Name {
 
         debug(
             .default,
-            "Trio Started: v\(devVersion)(\(Bundle.main.buildVersionNumber ?? "")) [buildDate: \(String(describing: BuildDetails.shared.buildDate()))] [buildExpires: \(String(describing: BuildDetails.shared.calculateExpirationDate()))] [Branch: \(BuildDetails.shared.branchAndSha)] [submodules: \(submodulesInfo)]"
+            "Trio Started: v\(devVersion)(\(Bundle.main.buildVersionNumber ?? "")) Boost \(BoostVersion.synced) [buildDate: \(String(describing: BuildDetails.shared.buildDate()))] [buildExpires: \(String(describing: BuildDetails.shared.calculateExpirationDate()))] [Branch: \(BuildDetails.shared.branchAndSha)] [submodules: \(submodulesInfo)]"
         )
         // Fix bug in iOS 18 related to the translucent tab bar
         configureTabBarAppearance()
