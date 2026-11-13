@@ -313,6 +313,13 @@ enum DeterminationGenerator {
         if profile.smbDeliveryRatio != 0.5 {
             tddReason += ", SMB Ratio: \(min(profile.smbDeliveryRatio, 1))"
         }
+        // Shadow value: profile ISF→ISF from the glucose curve. It is written to the reason only and nothing doses from it.
+        if let curveSensitivity = DynamicISF.glucoseCurveSensitivity(
+            currentGlucose: currentGlucose,
+            profileSensitivity: originalSensitivity
+        ) {
+            tddReason += ", Curve ISF: \(originalSensitivity.jsRounded(scale: 1))→\(curveSensitivity.jsRounded(scale: 1))"
+        }
 
         let dosingInputs = DosingEngine.prepareDosingInputs(
             profile: profile,

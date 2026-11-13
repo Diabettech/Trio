@@ -131,7 +131,7 @@
     ]
   },
   "rate" : 0,
-  "reason" : "Autosens ratio: 1.08, ISF: 55→51, COB: 0, Dev: 26, BGI: -3, CR: 12, Target: 95, minPredBG 41, minGuardBG 24, IOBpredBG 39, UAMpredBG 39; minGuardBG 24<68",
+  "reason" : "Autosens ratio: 1.08, ISF: 55→51, COB: 0, Dev: 26, BGI: -3, CR: 12, Target: 95, minPredBG 41, minGuardBG 24, IOBpredBG 39, UAMpredBG 39, Curve ISF: 55→87.2; minGuardBG 24<68",
   "received" : false,
   "sensitivityRatio" : 1.08,
   "threshold" : 68,

@@ -86,6 +86,25 @@ import Testing
         #expect(result == nil)
     }
 
+    /// The reference values come from `inv013.candidate.curve_profile` in tim2000s/dynamic-isf-calculations,
+    /// for a profile sensitivity of 50. The AndroidAPS shadow code is tested against the same table.
+    @Test("Glucose curve sensitivity matches the reference values") func glucoseCurveSensitivity() throws {
+        let reference: [(Decimal, String)] = [
+            (40, "79.2753"), (60, "79.2753"), (100, "79.2753"), (120, "62.4565"), (140, "50"),
+            (180, "34.678"), (250, "24.3772"), (300, "20.7823"), (380, "15.0273"), (450, "15.0273")
+        ]
+        for (glucose, expected) in reference {
+            let result = try #require(DynamicISF.glucoseCurveSensitivity(currentGlucose: glucose, profileSensitivity: 50))
+            #expect(result.rounded(toPlaces: 4) == Decimal(string: expected), "glucose \(glucose)")
+        }
+    }
+
+    @Test("Glucose curve sensitivity is nil for input that is not positive") func glucoseCurveSensitivityBadInput() {
+        #expect(DynamicISF.glucoseCurveSensitivity(currentGlucose: 0, profileSensitivity: 50) == nil)
+        #expect(DynamicISF.glucoseCurveSensitivity(currentGlucose: 120, profileSensitivity: -1) == nil)
+        #expect(DynamicISF.glucoseCurveSensitivity(currentGlucose: Decimal.nan, profileSensitivity: 50) == nil)
+    }
+
     @Test("Logarithmic formula calculates all result fields correctly") func logarithmicFormula() throws {
         let (profile, preferences, glucose, trioVars) = createDependencies()
 

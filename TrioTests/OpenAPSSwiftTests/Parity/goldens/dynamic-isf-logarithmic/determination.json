@@ -151,7 +151,7 @@
     ]
   },
   "rate" : 0,
-  "reason" : "Autosens ratio: 1.16, ISF: 55→47, COB: 0, Dev: 56, BGI: -4, CR: 12, Target: 95, minPredBG 114, minGuardBG 127, IOBpredBG 102, UAMpredBG 128, Dynamic ISF: On, Logarithmic formula, AF: 0.8, Basal ratio: 1.01; Eventual BG 128 >= 95,  insulinReq 0.4; setting 30m low temp of 0U/h. Microbolusing 0.2U. ",
+  "reason" : "Autosens ratio: 1.16, ISF: 55→47, COB: 0, Dev: 56, BGI: -4, CR: 12, Target: 95, minPredBG 114, minGuardBG 127, IOBpredBG 102, UAMpredBG 128, Dynamic ISF: On, Logarithmic formula, AF: 0.8, Basal ratio: 1.01, Curve ISF: 55→49.6; Eventual BG 128 >= 95,  insulinReq 0.4; setting 30m low temp of 0U/h. Microbolusing 0.2U. ",
   "received" : false,
   "sensitivityRatio" : 1.16422777629632061303466666666666666665,
   "threshold" : 68,
