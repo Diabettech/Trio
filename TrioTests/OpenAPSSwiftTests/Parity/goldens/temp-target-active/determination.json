@@ -166,7 +166,7 @@
     ]
   },
   "rate" : 0,
-  "reason" : "Autosens ratio: 0.67, ISF: 55→82, COB: 0, Dev: 72, BGI: -6, CR: 12, Target: 130, minPredBG 74, minGuardBG 101, IOBpredBG 48, UAMpredBG 102; Eventual BG 102 < 130, setting 120m zero temp. ",
+  "reason" : "Autosens ratio: 0.67, ISF: 55→82, COB: 0, Dev: 72, BGI: -6, CR: 12, Target: 130, minPredBG 74, minGuardBG 101, IOBpredBG 48, UAMpredBG 102, Curve ISF: 55→49.6; Eventual BG 102 < 130, setting 120m zero temp. ",
   "received" : false,
   "sensitivityRatio" : 0.67,
   "threshold" : 85,

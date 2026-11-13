@@ -103,6 +103,7 @@ import Testing
         let det = try #require(try run(.active))
         let v1 = try #require(det.boostV1)
         #expect(det.reason.contains("Boost V1 tier \(v1.tier)"))
+        #expect(det.reason.contains(", Curve ISF: "))
         // The engine's inputs: profile target midpoint, min(boost_maxIOB 1.0 default, max_iob 6), the
         // LGS threshold, and the 60-minute low from the one reading.
         #expect(v1.inputTargetBg == 125)

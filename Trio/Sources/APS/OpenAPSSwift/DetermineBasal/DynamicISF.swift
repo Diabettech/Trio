@@ -15,6 +15,28 @@ struct DynamicISFResult {
 }
 
 enum DynamicISF {
+    /// Glucose where the profile sensitivity is taken to hold in `glucoseCurveSensitivity`. A choice, not a measured value.
+    static let glucoseCurveAnchor: Decimal = 140
+
+    /// Sensitivity from the published glucose curve, scaled to the profile.
+    ///
+    /// Shadow value: it is written to the reason of each determination and nothing doses from it.
+    /// The curve is the quartic of Romero-Ugalde et al., Diabetes 2025;74(Supplement 1):920-P, doi:10.2337/db25-920-P.
+    /// It was fitted for 100 to 380 mg/dL, so glucose is held at these ends.
+    /// - Parameters:
+    ///   - currentGlucose: The most recent glucose reading in mg/dL.
+    ///   - profileSensitivity: The effective, override-adjusted insulin sensitivity (ISF) from the profile.
+    /// - Returns: Sensitivity in mg/dL per unit, or `nil` when an input is not positive.
+    static func glucoseCurveSensitivity(currentGlucose: Decimal, profileSensitivity: Decimal) -> Decimal? {
+        guard currentGlucose > 0, profileSensitivity > 0 else { return nil }
+        func curve(_ glucose: Decimal) -> Decimal {
+            let g2 = glucose * glucose
+            return 272 - Decimal(string: "3.121")! * glucose + Decimal(string: "0.01511")! * g2
+                - Decimal(string: "0.00003305")! * g2 * glucose + Decimal(string: "0.0000000269")! * g2 * g2
+        }
+        return profileSensitivity * curve(currentGlucose.clamp(lowerBound: 100, upperBound: 380)) / curve(glucoseCurveAnchor)
+    }
+
     /// Calculates the dynamic ISF ratio and related values.
     ///
     /// This function ports the core logic from `determine-basal.js` for dynamic ISF.

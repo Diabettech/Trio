@@ -336,6 +336,13 @@ enum BoostV1Determination {
 
         var reason =
             "Autosens ratio: \(fmt(sensitivityRatio)), ISF: \(profileSens.jsRounded())→\(fmt(rT.variableSens ?? isf.variableSens)), "
+        // Shadow value, as in DetermineBasalGenerator: written to the reason only, nothing doses from it.
+        if let curveSensitivity = DynamicISF.glucoseCurveSensitivity(
+            currentGlucose: glucoseStatus.glucose,
+            profileSensitivity: profileSens
+        ) {
+            reason += "Curve ISF: \(profileSens.jsRounded(scale: 1))→\(curveSensitivity.jsRounded(scale: 1)), "
+        }
         reason += rT.reason
         reason += " Boost V1 tier \(rT.boostTier)" + (gate.active ? "" : " (Boost inactive)") + ";"
         if leversOff { reason += " SMB off (user lever);" }
