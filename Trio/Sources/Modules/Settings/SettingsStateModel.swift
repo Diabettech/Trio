@@ -16,6 +16,7 @@ extension Settings {
         @Injected() var overrideStorage: OverrideStorage!
         @Injected() private var keychain: Keychain!
         @Injected() private var boostActivityMonitor: BoostActivityMonitor!
+        @Injected() private var apsManager: APSManager!
 
         @Published var units: GlucoseUnits = .mgdL
         @Published var dosingMode: DosingMode = .open
@@ -230,6 +231,23 @@ extension Settings {
             let hasCgm = fetchCgmManager.cgmGlucoseSourceType != .none
             let hasPump = provider.deviceManager.pumpManager != nil
             return hasCgm && hasPump
+        }
+
+        /// Runs auto-config now and reloads the values it can write, so the screen shows them and a
+        /// slider moved next starts from them rather than overwriting the run.
+        @MainActor func runBoostAutoConfigNow(overrideHypoProtections: Bool) async -> [String] {
+            let lines = await apsManager.runBoostAutoConfigNow(overrideHypoProtections: overrideHypoProtections)
+            let p = settingsManager.preferences
+            boostV5Aggression = p.boostV5Aggression
+            boostV5HypoCaution = p.boostV5HypoCaution
+            boostV5ConfirmedCapU = p.boostV5ConfirmedCapU
+            boostV5CommittedCapU = p.boostV5CommittedCapU
+            boostCumulativeSmbCap60Min = p.boostCumulativeSmbCap60Min
+            boostV5PrimerCapU = p.boostV5PrimerCapU
+            boostV5PrimerTbrFallback = p.boostV5PrimerTbrFallback
+            boostV5AggressiveEarlyConfirm = p.boostV5AggressiveEarlyConfirm
+            boostV5FastCarbConfirm = p.boostV5FastCarbConfirm
+            return lines
         }
 
         // The user moved a V5 dosing-cap slider — record it so first-activation auto-config never

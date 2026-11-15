@@ -45,6 +45,14 @@ enum BoostRedriveStore {
         return now.timeIntervalSince1970 - last >= interval
     }
 
+    /// Hours since the last evaluation, scheduled or run by hand; nil before the first.
+    static func hoursSinceLastRun(now: Date) -> Double? {
+        lock.lock()
+        defer { lock.unlock() }
+        let last = UserDefaults.standard.double(forKey: lastRunKey)
+        return last > 0 ? (now.timeIntervalSince1970 - last) / 3600 : nil
+    }
+
     static func markRun(now: Date) {
         lock.lock()
         defer { lock.unlock() }

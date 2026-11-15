@@ -76,3 +76,22 @@ import Testing
         #expect(highlight.highlightedSetting == nil)
     }
 }
+
+/// A Boost settings slider writes through the state model to the stored preferences, so moving a
+/// slider changes the setting itself. Whether the screen redraws is a separate matter: the advanced
+/// screen is its own view observing the state model.
+@Suite("Boost settings write-through", .serialized) struct BoostSettingsWriteThroughTests {
+    @Test("A slider write reaches the stored preferences") func sliderWriteReachesPreferences() {
+        let resolver = TrioApp().resolver
+        let settingsManager = resolver.resolve(SettingsManager.self)!
+        let original = settingsManager.preferences.boostV5Sensitivity
+        defer { settingsManager.preferences.boostV5Sensitivity = original }
+
+        let state = Settings.StateModel()
+        state.resolver = resolver
+        let moved: Decimal = original == 1.15 ? 0.85 : 1.15
+        state.boostV5Sensitivity = moved
+
+        #expect(settingsManager.preferences.boostV5Sensitivity == moved)
+    }
+}

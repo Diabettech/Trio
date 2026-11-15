@@ -22,10 +22,11 @@ final class RedriveTests: XCTestCase {
         @discardableResult func run(
             _ s: BoostV5AutoConfig.Suggestion,
             tbr70: Double = 2.0,
-            sev54: Double = 0.2
+            sev54: Double = 0.2,
+            override: Bool = false
         ) -> [Apply.Resolution] {
             Apply.redrive(
-                suggestion: s, tbrBelow70Pct: tbr70, timeBelow54Pct: sev54,
+                suggestion: s, tbrBelow70Pct: tbr70, timeBelow54Pct: sev54, overrideHypoProtections: override,
                 storedValue: { self.value[$0] }, currentDefault: { _ in 0 },
                 baselineValue: { self.baseline[$0] }, pendingValue: { self.pending[$0] },
                 put: { self.value[$0] = $1 },
@@ -131,6 +132,21 @@ final class RedriveTests: XCTestCase {
         let out = store.run(suggestion(committedCapU: 1.5), tbr70: 9.0)
         XCTAssertTrue(out.contains { $0.knob == .committedCapU && $0.outcome == .suggestedNotAppliedTbr })
         XCTAssertEqual(store.value[.committedCapU], 0.5)
+    }
+
+    /// The run-now dialog's override lifts both guards for that run, so the same raise is written.
+    func testTheOverrideLetsAHeldRaiseThrough() {
+        for (tbr70, sev54) in [(9.0, 0.2), (2.0, 3.0)] {
+            let store = Store()
+            store.run(suggestion(committedCapU: 1.0))
+            let out = store.run(suggestion(committedCapU: 1.5), tbr70: tbr70, sev54: sev54, override: true)
+            XCTAssertFalse(out.contains { $0.outcome == .suggestedNotAppliedTbr })
+            XCTAssertGreaterThan(store.value[.committedCapU]!, 0.5)
+        }
+        XCTAssertTrue(Apply.raiseGuardTripped(tbrBelow70Pct: 4.1, timeBelow54Pct: 0))
+        XCTAssertTrue(Apply.raiseGuardTripped(tbrBelow70Pct: 0, timeBelow54Pct: 1.0))
+        XCTAssertFalse(Apply.raiseGuardTripped(tbrBelow70Pct: 4.0, timeBelow54Pct: 0.9))
+        XCTAssertFalse(Apply.raiseGuardTripped(tbrBelow70Pct: 9, timeBelow54Pct: 3, overridden: true))
     }
 
     func testATighteningIsNeverHeldByTheRaiseGuard() {

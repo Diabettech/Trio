@@ -337,6 +337,14 @@ public enum BoostV5AutoConfigApply {
         return autoValues.contains { abs(stored - $0) <= tolerance + defaultEps }
     }
 
+    /// The re-derivation's raise guard, for the dose caps and the insulin-adding switches: time below
+    /// 70 mg/dL over `tbrRaiseGuardPct`, or time below 54 mg/dL at or over `tbr54RaiseGuardPct`.
+    /// `overridden` is the person's choice in the run-now dialog and lifts both for that run only;
+    /// the scheduled runs never pass it.
+    public static func raiseGuardTripped(tbrBelow70Pct: Double, timeBelow54Pct: Double, overridden: Bool = false) -> Bool {
+        !overridden && (tbrBelow70Pct > tbrRaiseGuardPct || timeBelow54Pct >= tbr54RaiseGuardPct)
+    }
+
     /// Apply the derivation's MOVEMENT to each tracked knob's current value, rather than
     /// overwriting it with a fresh absolute derivation.
     ///
@@ -363,6 +371,7 @@ public enum BoostV5AutoConfigApply {
         suggestion: BoostV5AutoConfig.Suggestion,
         tbrBelow70Pct: Double,
         timeBelow54Pct: Double,
+        overrideHypoProtections: Bool = false,
         storedValue: (BoostAutoConfigKnob) -> Double?,
         currentDefault: (BoostAutoConfigKnob) -> Double,
         baselineValue: (BoostAutoConfigKnob) -> Double?,
@@ -375,7 +384,9 @@ public enum BoostV5AutoConfigApply {
         recordWritten: (BoostAutoConfigKnob, Double) -> Void = { _, _ in }
     ) -> [Resolution] {
         var out: [Resolution] = []
-        let raiseGuard = tbrBelow70Pct > Self.tbrRaiseGuardPct || timeBelow54Pct >= Self.tbr54RaiseGuardPct
+        let raiseGuard = Self.raiseGuardTripped(
+            tbrBelow70Pct: tbrBelow70Pct, timeBelow54Pct: timeBelow54Pct, overridden: overrideHypoProtections
+        )
         let derivedFor: [BoostAutoConfigKnob: Double] = [
             .aggression: suggestion.aggression,
             .hypoCaution: suggestion.hypoCaution,

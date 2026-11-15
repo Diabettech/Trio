@@ -84,6 +84,13 @@ Under **Settings → Features**, the Boost sections are:
 
 Glucose‑valued settings respect your mmol/L vs mg/dL display unit.
 
+Each setting shows its description under its title, as AAPS Boost does. The texts are the AAPS
+Boost 6.3.2 preference summaries, with Health Connect and Wear OS replaced by Apple Health and night
+times given in hours. The primer has one switch, Force primer as bolus, as in AAPS; the temp-basal
+route behind it is auto-config's and no longer appears on the screen. The re-evaluation still treats a
+temp-basal route it did not record writing as the person's, which now covers only values set before
+the switch was removed.
+
 ## Auto‑configuration (first activation)
 
 The first time Boost is switched to **Active**, it **seeds the V6 knobs from your own recent dosing
@@ -119,6 +126,18 @@ sizes** (split from pump history), your **time‑below‑range** (% < 70 and % <
 current value) is **not auto‑applied when 14‑day time‑below‑70 exceeds 4%** — it is surfaced as a
 suggestion in the notification instead (set it manually if desired). Lowerings and all non‑cap
 tightenings always apply.
+
+Run now, and the override (November 2026, Trio and AAPS). Advanced Boost has a "Run auto-config now"
+action. It runs the weekly re-derivation immediately (28-day window, which restarts the 7-day clock)
+with Boost Active, once first set-up has resolved every knob and at least 24 hours after the last run
+of either kind, and lists what each setting did. The 24 hours is there because each run moves a cap
+at most a quarter of the way and some changes wait for two runs to agree, so repeated presses would
+otherwise step a cap up within minutes. Its dialog has an
+"Override hypo protections" switch, off each time the dialog opens. With it on, that one run does not
+apply the raise guard (time below 70 mg/dL over 4.0%, or below 54 mg/dL at 1.0% or more) to the dose
+caps, aggression, hypo caution, the cumulative cap, the primer, or the two insulin-adding switches. The
+deadband, the confirmation filter and every value's own bounds still apply. Scheduled runs never take
+the override. This can add insulin, and only when the person chooses it.
 
 A well‑controlled user lands on a fully neutral config (Aggression 1.0, HypoCaution 1.0, fast‑carb on);
 a low‑prone user gets gentler aggression, more hypo damping, tighter caps, and fast‑carb off — all in the

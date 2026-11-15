@@ -41,6 +41,8 @@ protocol APSManager {
     func roundBolus(amount: Decimal) -> Decimal
     var lastError: CurrentValueSubject<Error?, Never> { get }
     func cancelBolus(_ callback: ((Bool, String) -> Void)?) async
+    /// Runs the Boost re-derivation now, from the settings screen, and returns one line per result.
+    func runBoostAutoConfigNow(overrideHypoProtections: Bool) async -> [String]
     var iobFileDidUpdate: PassthroughSubject<Void, Never> { get }
 }
 
@@ -1175,6 +1177,30 @@ final class BaseAPSManager: APSManager, Injectable {
         }
     }
 
+    /// The run-now action in Advanced Boost. The same re-derivation as the scheduled one, at least a
+    /// day after the last run of either kind: each run moves a setting at most a quarter of the way
+    /// and some changes wait for two runs to agree, so repeated presses would otherwise step a cap
+    /// up within minutes.
+    func runBoostAutoConfigNow(overrideHypoProtections: Bool) async -> [String] {
+        guard settingsManager.preferences.boostMode == .active else {
+            return ["Auto-config runs only with Boost Active."]
+        }
+        let onboardingDone = BoostAutoConfigKnob.allCases
+            .allSatisfy { settingsManager.preferences.boostV5AutoConfigResolved.contains($0.rawValue) }
+        // Before first set-up has resolved every knob, a re-derivation write would read to onboarding
+        // as set by the person and freeze it (the same reason the scheduled run waits).
+        guard onboardingDone else {
+            return ["First set-up has not finished yet. It runs on the loop once Boost is Active and there is enough history."]
+        }
+        if let hours = BoostRedriveStore.hoursSinceLastRun(now: Date()), hours < 24 {
+            return [String(
+                format: "Auto-config last ran %.0f hours ago. Runs are at least 24 hours apart; the next is possible in %.0f hours.",
+                hours, (24 - hours).rounded(.up)
+            )]
+        }
+        return await redriveBoostAutoConfig(overrideHypoProtections: overrideHypoProtections)
+    }
+
     /// Auto-config: when the user runs Boost V5 active, seed the V5 knobs from their own
     /// last-14-day prior (oref) dosing + glycaemia. Suggestion-only: writes a knob ONLY while the
     /// user hasn't tuned it (caps: `…UserSet` flag; others: value differs from EVERY factory
@@ -1204,7 +1230,7 @@ final class BaseAPSManager: APSManager, Injectable {
     /// Note the window differs from onboarding's 14 days. Two independent 14-day derivations of the
     /// same fortnight differ by 0.69 U [0.30, 1.17] on the confirmed cap, which is noise-dominated
     /// for tracking a drift.
-    private func redriveBoostAutoConfig() async {
+    @discardableResult private func redriveBoostAutoConfig(overrideHypoProtections: Bool = false) async -> [String] {
         BoostRedriveStore.markRun(now: Date())
         do {
             let since = Date().addingTimeInterval(-Double(BoostRedriveStore.windowDays) * 86400)
@@ -1222,7 +1248,7 @@ final class BaseAPSManager: APSManager, Injectable {
             }
             guard let summary else {
                 debug(.loop, "BoostV5 re-derivation: no glucose in the window — skipped")
-                return
+                return ["No glucose in the last \(BoostRedriveStore.windowDays) days, so nothing was changed."]
             }
             let values = summary.values
             let n = values.count
@@ -1262,7 +1288,7 @@ final class BaseAPSManager: APSManager, Injectable {
                 currentMaxIobU: maxIob, currentMaxBolusU: maxBolus
             )) else {
                 debug(.loop, "BoostV5 re-derivation: insufficient history (days=\(daysWithData), bg=\(n))")
-                return
+                return ["Not enough history yet (\(daysWithData) days, \(n) readings), so nothing was changed."]
             }
 
             var prefs = settingsManager.preferences
@@ -1271,6 +1297,7 @@ final class BaseAPSManager: APSManager, Injectable {
                 suggestion: s,
                 tbrBelow70Pct: tbr70,
                 timeBelow54Pct: sev54,
+                overrideHypoProtections: overrideHypoProtections,
                 storedValue: { Self.boostKnobValue($0, prefs) },
                 currentDefault: { Self.boostKnobValue($0, stock) },
                 baselineValue: { BoostRedriveStore.baseline($0) },
@@ -1311,8 +1338,13 @@ final class BaseAPSManager: APSManager, Injectable {
                 recordWellControlled: { BoostRedriveStore.setPendingFlag(BoostV5AutoConfigApply.primerRoutePrevWcKey, $0) }
             )
             debug(.loop, "BoostV5 re-derivation: primerTbrFallback → \(route.reason)")
-            let raiseGuard = tbr70 > BoostV5AutoConfigApply.tbrRaiseGuardPct ||
-                sev54 >= BoostV5AutoConfigApply.tbr54RaiseGuardPct
+            let raiseGuard = BoostV5AutoConfigApply.raiseGuardTripped(
+                tbrBelow70Pct: tbr70, timeBelow54Pct: sev54, overridden: overrideHypoProtections
+            )
+            if overrideHypoProtections {
+                debug(.loop, "BoostV5 re-derivation: hypo protections overridden by the person for this run")
+            }
+            var switchLines: [String] = []
             for (knob, allowsOn) in [
                 (BoostAutoConfigKnob.aggressiveEarlyConfirm, s.aggressiveEarlyConfirm),
                 (.fastCarbConfirm, s.fastCarbConfirm)
@@ -1333,13 +1365,21 @@ final class BaseAPSManager: APSManager, Injectable {
                     recordVerdict: { BoostRedriveStore.setPendingFlag(verdictKey, $0) }
                 )
                 debug(.loop, "BoostV5 re-derivation: \(knob.rawValue) → \(r.reason)")
+                switchLines.append("\(knob.rawValue): \(r.reason)")
             }
             settingsManager.preferences = prefs
             for r in resolutions {
                 debug(.loop, "BoostV5 re-derivation: \(r.knob.rawValue) → \(r.reason)")
             }
+            let header = String(
+                format: "%d days, %d readings. Time below 70: %.1f%%, below 54: %.1f%%.%@",
+                daysWithData, n, tbr70, sev54, overrideHypoProtections ? " Hypo protections overridden." : ""
+            )
+            return [header] + resolutions.map { "\($0.knob.rawValue): \($0.reason)" } +
+                ["primerTbrFallback: \(route.reason)"] + switchLines
         } catch {
             debug(.loop, "BoostV5 re-derivation failed (non-fatal): \(error)")
+            return ["Auto-config failed: \(error.localizedDescription)"]
         }
     }
 
