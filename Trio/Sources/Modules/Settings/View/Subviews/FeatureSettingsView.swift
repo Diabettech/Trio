@@ -44,10 +44,257 @@ struct FeatureSettingsView: BaseView {
                 }
             )
             .listRowBackground(Color.chart)
+
+            Section(
+                header: Text("Boost (V6)"),
+                footer: Text(
+                    "Off: stock Trio only. Shadow: runs the Boost V6 engine and logs what it would dose (in the determination reason) without changing dosing. Active: Boost V6 drives the SMB."
+                ),
+                content: {
+                    Picker("Boost Mode", selection: $state.boostMode) {
+                        ForEach(BoostMode.allCases) { mode in
+                            Text(mode.displayName).tag(mode)
+                        }
+                    }
+                }
+            )
+            .listRowBackground(Color.chart)
+
+            if state.boostMode != .off {
+                // Essentials at top level — mirrors the AAPS Boost V6 screen. Everything else is
+                // auto-configured/learned and lives under "Advanced Boost Settings" below.
+                Section(header: Text("Boost V6 Tuning")) {
+                    boostSlider("Aggression", $state.boostV5Aggression, in: 0.7 ... 1.6, step: 0.05)
+                    boostSlider("Hypo Caution", $state.boostV5HypoCaution, in: 1.0 ... 2.0, step: 0.05)
+                }
+                .listRowBackground(Color.chart)
+
+                Section(
+                    header: Text("Boost Night Mode"),
+                    footer: Text(
+                        "Suppresses SMB overnight (Active mode). The BG offset is an activation gate (night mode only suppresses while BG is below profile target + offset), not a target raise. Timing & gating options are under Advanced."
+                    )
+                ) {
+                    Toggle("Enabled", isOn: $state.boostNightModeEnabled)
+                    if state.boostNightModeEnabled {
+                        boostGlucoseSlider("BG offset", $state.boostNightModeBgOffset, inMgdl: 0 ... 90)
+                    }
+                }
+                .listRowBackground(Color.chart)
+
+                Section {
+                    NavigationLink(destination: advancedBoostSettings) {
+                        Text("Advanced Boost Settings")
+                    }
+                }
+                .listRowBackground(Color.chart)
+            }
         }
         .scrollContentBackground(.hidden)
         .background(appState.trioBackgroundColor(for: colorScheme))
         .navigationTitle("Feature Settings")
         .navigationBarTitleDisplayMode(.automatic)
+        // Wire the StateModel to the resolver so subscribe() runs and the Boost setting
+        // bindings persist to preferences. Without this, edits (e.g. Boost Mode) update the
+        // in-memory @Published values but are never written back, so they revert on navigation.
+        .onAppear(perform: configureView)
+    }
+
+    /// Advanced Boost settings — pushed from the main Feature Settings screen. Mirrors the AAPS V6
+    /// "Advanced" sub-screen: advanced dosing knobs + the grouped-by-function engine settings.
+    private var advancedBoostSettings: some View {
+        Form {
+            Section(header: Text("Dosing (advanced)")) {
+                boostSlider("Sensitivity", $state.boostV5Sensitivity, in: 0.8 ... 1.2, step: 0.05)
+                boostSlider("Confirmed cap (U)", $state.boostV5ConfirmedCapU, in: 0 ... 7.5, step: 0.05) {
+                    state.markBoostV5ConfirmedCapUserSet()
+                }
+                boostSlider("Committed cap (U)", $state.boostV5CommittedCapU, in: 0 ... 2.5, step: 0.05) {
+                    state.markBoostV5CommittedCapUserSet()
+                }
+                boostSlider("Cumulative SMB cap / 60 min (U)", $state.boostCumulativeSmbCap60Min, in: 0 ... 10, step: 0.1) {
+                    state.markBoostCumulativeSmbCap60MinUserSet()
+                }
+                Toggle("Fast-carb confirm", isOn: $state.boostV5FastCarbConfirm)
+                Toggle("Phase-3 composed brake floor", isOn: $state.boostV5ComposedFloorActive)
+                Toggle("Confirm sooner", isOn: $state.boostV5AggressiveEarlyConfirm)
+                Toggle("Velocity-budget floor", isOn: $state.boostV5VelocityBudgetActive)
+                boostSlider("Early primer ceiling (U)", $state.boostV5PrimerCapU, in: 0 ... 2.5, step: 0.05)
+                Toggle("Primer via retractable temp basal", isOn: $state.boostV5PrimerTbrFallback)
+                Toggle("Force primer as bolus", isOn: $state.boostV5PrimerBolusMode)
+                Toggle("Confirm tranche", isOn: $state.boostV5ConfirmTranche)
+                boostSlider("Tranche immediate fraction", $state.boostV5TrancheFraction, in: 0 ... 1, step: 0.05)
+                boostSlider("Tranche release threshold", $state.boostV5TrancheThreshold, in: 0 ... 1, step: 0.01)
+                Toggle("Post-rescue tight-ramp trial", isOn: $state.boostV5PostRescueTightRampTrial)
+            }
+            .listRowBackground(Color.chart)
+
+            Section(
+                header: Text("Boost Dynamic ISF"),
+                footer: Text(
+                    "Applies only in Active mode. Use TDD derives ISF from total daily dose, and only then does BG change ISF: with Use TDD off the profile ISF is used as it is and Velocity is set to 0, and switching Use TDD on sets it back to 100. With Use TDD off, Autosens without TDD lets Autosens adjust ISF, basal, target and carb absorption. Circadian ISF applies a time-of-day sensitivity curve."
+                )
+            ) {
+                Toggle("Use TDD", isOn: $state.boostUseTdd)
+                if !state.boostUseTdd {
+                    Toggle("Autosens without TDD", isOn: $state.boostAutosensWhenNoTdd)
+                }
+                Toggle("Circadian ISF", isOn: $state.boostEnableCircadianIsf)
+                boostGlucoseSlider("Normal target", $state.boostDynIsfNormalTarget, inMgdl: 70 ... 120)
+                boostGlucoseSlider("BG cap", $state.boostDynIsfBgCap, inMgdl: 100 ... 300)
+                if state.boostUseTdd {
+                    boostSlider("Velocity %", $state.boostDynIsfVelocity, in: 0 ... 100, step: 5)
+                }
+                boostSlider("Adjustment factor %", $state.boostDynIsfAdjustmentFactor, in: 1 ... 300, step: 1)
+            }
+            .listRowBackground(Color.chart)
+
+            Section(
+                header: Text("Boost Night Mode — timing & gating"),
+                footer: Text("Enable + BG offset are on the main screen. These set the clock window and optional gates.")
+            ) {
+                boostSlider("Start hour", $state.boostNightModeStartHour, in: 0 ... 23, step: 1)
+                boostSlider("End hour", $state.boostNightModeEndHour, in: 0 ... 23, step: 1)
+                Toggle("Disable with COB", isOn: $state.boostNightModeDisableWithCob)
+                Toggle("Disable with low TT", isOn: $state.boostNightModeDisableWithLowTt)
+                Toggle("Auto by sleep", isOn: $state.boostNightModeAutoBySleep)
+                boostSlider("Sleep-in hours", $state.boostSleepInHours, in: 0 ... 18, step: 0.5)
+                boostSlider("Sleep-in steps (60m)", $state.boostSleepInSteps, in: 0 ... 1000, step: 50)
+            }
+            .listRowBackground(Color.chart)
+
+            Section(
+                header: Text("Boost V6 Pre-Meal"),
+                footer: Text(
+                    "Active mode: fires an anticipatory low target before learned meal times so insulin rises before carbs land (lower-only; suppressed during exercise)."
+                )
+            ) {
+                Toggle("Enabled", isOn: $state.boostV6PreMealEnabled)
+                if state.boostV6PreMealEnabled {
+                    boostGlucoseSlider("Pre-meal target", $state.boostV6PreMealTargetMgdl, inMgdl: 65 ... 90)
+                    boostSlider("Lead time (min)", $state.boostV6PreMealLeadMin, in: 30 ... 90, step: 5)
+                }
+            }
+            .listRowBackground(Color.chart)
+
+            Section(
+                header: Text("Boost Exercise — Steps"),
+                footer: Text(
+                    "Step thresholds (per window) that flag activity, and the profile % applied when active / inactive."
+                )
+            ) {
+                boostSlider("Active steps / 5 min", $state.boostActivitySteps5, in: 0 ... 2000, step: 10)
+                boostSlider("Active steps / 15 min", $state.boostActivitySteps15, in: 0 ... 4000, step: 25)
+                boostSlider("Active steps / 30 min", $state.boostActivitySteps30, in: 0 ... 6000, step: 50)
+                boostSlider("Active steps / 60 min", $state.boostActivitySteps60, in: 0 ... 10000, step: 50)
+                boostSlider("Activity profile %", $state.boostActivityPct, in: 30 ... 150, step: 5)
+                boostSlider("Inactive steps / 60 min", $state.boostInactivitySteps, in: 0 ... 1000, step: 25)
+                boostSlider("Inactivity profile %", $state.boostInactivityPct, in: 100 ... 200, step: 5)
+            }
+            .listRowBackground(Color.chart)
+
+            Section(
+                header: Text("Boost Exercise — Heart Rate"),
+                footer: Text(
+                    "When enabled, heart-rate zones refine activity classification (aerobic vs resistance vs stress)."
+                )
+            ) {
+                Toggle("HR integration", isOn: $state.boostHrIntegrationEnabled)
+                if state.boostHrIntegrationEnabled {
+                    boostSlider("Max HR (bpm)", $state.boostHrMaxBpm, in: 150 ... 220, step: 1)
+                    boostSlider("Resting HR (bpm)", $state.boostHrRestingBpm, in: 30 ... 100, step: 1)
+                    Toggle("Stress detection", isOn: $state.boostHrStressDetection)
+                }
+            }
+            .listRowBackground(Color.chart)
+
+            Section(
+                header: Text("Boost Post-Exercise"),
+                footer: Text("After exercise, eases dosing for a recovery window (Active mode).")
+            ) {
+                Toggle("Enabled", isOn: $state.boostPostExerciseEnabled)
+                if state.boostPostExerciseEnabled {
+                    boostSlider("Recovery window (h)", $state.boostPostExerciseHours, in: 0.5 ... 8, step: 0.5)
+                    boostGlucoseSlider("Recovery target", $state.boostPostExerciseTarget, inMgdl: 90 ... 200)
+                    boostSlider("SMB scale", $state.boostPostExerciseScale, in: 0 ... 1, step: 0.05)
+                    boostSlider("Min duration (min)", $state.boostPostExerciseMinDuration, in: 1 ... 120, step: 1)
+                }
+            }
+            .listRowBackground(Color.chart)
+        }
+        .scrollContentBackground(.hidden)
+        .background(appState.trioBackgroundColor(for: colorScheme))
+        .navigationTitle("Advanced Boost")
+        .navigationBarTitleDisplayMode(.automatic)
+    }
+
+    @ViewBuilder private func boostSlider(
+        _ title: String,
+        _ value: Binding<Decimal>,
+        in range: ClosedRange<Double>,
+        step: Double,
+        onUserEdit: (() -> Void)? = nil
+    ) -> some View {
+        VStack(alignment: .leading) {
+            HStack {
+                Text(title)
+                Spacer()
+                Text(String(format: "%.2f", (value.wrappedValue as NSDecimalNumber).doubleValue))
+                    .foregroundStyle(.secondary)
+            }
+            Slider(
+                value: Binding(
+                    get: { (value.wrappedValue as NSDecimalNumber).doubleValue },
+                    set: { value.wrappedValue = Decimal($0) }
+                ),
+                in: range,
+                step: step,
+                onEditingChanged: { editing in
+                    // Fires only on genuine user interaction (drag start/end), never programmatically —
+                    // the right place to flag a knob as user-set. Mark on release.
+                    if !editing { onUserEdit?() }
+                }
+            )
+        }
+    }
+
+    /// Glucose-valued slider: stored in mg/dL, displayed + adjusted in the user's units.
+    /// (mmol/L users see/drag mmol; the value persists as mg/dL via Trio's native asMgdL.)
+    @ViewBuilder private func boostGlucoseSlider(
+        _ title: String,
+        _ valueMgdl: Binding<Decimal>,
+        inMgdl rangeMgdl: ClosedRange<Double>
+    ) -> some View {
+        let mmol = state.units == .mmolL
+        let unit = mmol ? "mmol/L" : "mg/dL"
+        let range: ClosedRange<Double> = mmol
+            ? (Decimal(rangeMgdl.lowerBound).asMmolL as NSDecimalNumber)
+            .doubleValue ... (Decimal(rangeMgdl.upperBound).asMmolL as NSDecimalNumber).doubleValue
+            : rangeMgdl
+        let step: Double = mmol ? 0.1 : 1
+        let shown = mmol
+            ? String(format: "%.1f", (valueMgdl.wrappedValue.asMmolL as NSDecimalNumber).doubleValue)
+            : String(format: "%.0f", (valueMgdl.wrappedValue as NSDecimalNumber).doubleValue)
+        VStack(alignment: .leading) {
+            HStack {
+                Text(title)
+                Spacer()
+                Text("\(shown) \(unit)").foregroundStyle(.secondary)
+            }
+            Slider(
+                value: Binding(
+                    get: {
+                        mmol
+                            ? (valueMgdl.wrappedValue.asMmolL as NSDecimalNumber).doubleValue
+                            : (valueMgdl.wrappedValue as NSDecimalNumber).doubleValue
+                    },
+                    set: { newValue in
+                        valueMgdl.wrappedValue = mmol ? Decimal(newValue).asMgdL : Decimal(newValue)
+                    }
+                ),
+                in: range,
+                step: step
+            )
+        }
     }
 }
