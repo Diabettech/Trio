@@ -95,3 +95,25 @@ import Testing
         #expect(settingsManager.preferences.boostV5Sensitivity == moved)
     }
 }
+
+/// Votes from a run whose raise guard was overridden are kept apart from the scheduled ledger, so a
+/// scheduled run cannot complete a two-run confirmation with one; and only one run holds the lock.
+@Suite("Boost re-derivation ledgers", .serialized) struct BoostRedriveLedgerTests {
+    @Test("An overridden run's vote is invisible to a scheduled run") func overriddenVotesAreSeparate() {
+        BoostRedriveStore.reset()
+        defer { BoostRedriveStore.reset() }
+        BoostRedriveStore.setPending(.committedCapU, 0.8, overridden: true)
+        BoostRedriveStore.setPendingFlag("aec.prev", true, overridden: true)
+        #expect(BoostRedriveStore.pending(.committedCapU) == nil)
+        #expect(BoostRedriveStore.pendingFlag("aec.prev") == nil)
+        #expect(BoostRedriveStore.pending(.committedCapU, overridden: true) == 0.8)
+    }
+
+    @Test("Only one run at a time") func oneRunAtATime() {
+        #expect(BoostRedriveStore.tryBeginRun())
+        #expect(!BoostRedriveStore.tryBeginRun())
+        BoostRedriveStore.endRun()
+        #expect(BoostRedriveStore.tryBeginRun())
+        BoostRedriveStore.endRun()
+    }
+}

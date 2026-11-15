@@ -510,6 +510,10 @@ final class BaseAPSManager: APSManager, Injectable {
             .allSatisfy { settingsManager.preferences.boostV5AutoConfigResolved.contains($0.rawValue) }
         if settingsManager.preferences.boostMode == .active, onboardingDone, BoostRedriveStore.isDue(now: Date()) {
             Task.detached(priority: .utility) { [weak self] in
+                guard BoostRedriveStore.tryBeginRun() else { return }
+                defer { BoostRedriveStore.endRun() }
+                // Checked again under the run lock: a run by hand may have finished meanwhile.
+                guard BoostRedriveStore.isDue(now: Date()) else { return }
                 await self?.redriveBoostAutoConfig()
             }
         }
@@ -1192,6 +1196,10 @@ final class BaseAPSManager: APSManager, Injectable {
         guard onboardingDone else {
             return ["First set-up has not finished yet. It runs on the loop once Boost is Active and there is enough history."]
         }
+        guard BoostRedriveStore.tryBeginRun() else {
+            return ["An auto-config run is already in progress."]
+        }
+        defer { BoostRedriveStore.endRun() }
         if let hours = BoostRedriveStore.hoursSinceLastRun(now: Date()), hours < 24 {
             return [String(
                 format: "Auto-config last ran %.0f hours ago. Runs are at least 24 hours apart; the next is possible in %.0f hours.",
@@ -1291,6 +1299,10 @@ final class BaseAPSManager: APSManager, Injectable {
                 return ["Not enough history yet (\(daysWithData) days, \(n) readings), so nothing was changed."]
             }
 
+            // When the override lifts a guard that would otherwise hold, this run's votes go to a
+            // separate ledger: a scheduled run must not complete a two-run confirmation with them.
+            let separateVotes = overrideHypoProtections &&
+                BoostV5AutoConfigApply.raiseGuardTripped(tbrBelow70Pct: tbr70, timeBelow54Pct: sev54)
             var prefs = settingsManager.preferences
             let stock = Preferences()
             let resolutions = BoostV5AutoConfigApply.redrive(
@@ -1301,7 +1313,7 @@ final class BaseAPSManager: APSManager, Injectable {
                 storedValue: { Self.boostKnobValue($0, prefs) },
                 currentDefault: { Self.boostKnobValue($0, stock) },
                 baselineValue: { BoostRedriveStore.baseline($0) },
-                pendingValue: { BoostRedriveStore.pending($0) },
+                pendingValue: { BoostRedriveStore.pending($0, overridden: separateVotes) },
                 put: { knob, value in
                     switch knob {
                     case .aggression: prefs.boostV5Aggression = Decimal(value)
@@ -1319,7 +1331,7 @@ final class BaseAPSManager: APSManager, Injectable {
                     }
                 },
                 setBaseline: { BoostRedriveStore.setBaseline($0, $1) },
-                setPending: { BoostRedriveStore.setPending($0, $1) },
+                setPending: { BoostRedriveStore.setPending($0, $1, overridden: separateVotes) },
                 isUserTuned: { Self.boostKnobUserTuned($0, prefs, stock: stock) },
                 lastWritten: { BoostRedriveStore.lastWritten($0) },
                 recordWritten: { BoostRedriveStore.recordWritten($0, $1) }
@@ -1355,14 +1367,14 @@ final class BaseAPSManager: APSManager, Injectable {
                     allowsOn: allowsOn,
                     raiseGuard: raiseGuard,
                     bgReadings: n,
-                    previousAllowsOn: BoostRedriveStore.pendingFlag(verdictKey),
+                    previousAllowsOn: BoostRedriveStore.pendingFlag(verdictKey, overridden: separateVotes),
                     stored: isAec ? prefs.boostV5AggressiveEarlyConfirm : prefs.boostV5FastCarbConfirm,
                     defaultValue: isAec ? stock.boostV5AggressiveEarlyConfirm : stock.boostV5FastCarbConfirm,
                     lastWritten: BoostRedriveStore.lastWrittenBool(knob),
                     userMarked: BoostRedriveStore.lastWritten(knob) == BoostV5AutoConfigApply.switchUserSetMark,
                     put: { if isAec { prefs.boostV5AggressiveEarlyConfirm = $0 } else { prefs.boostV5FastCarbConfirm = $0 } },
                     recordWritten: { BoostRedriveStore.recordWrittenBool(knob, $0) },
-                    recordVerdict: { BoostRedriveStore.setPendingFlag(verdictKey, $0) }
+                    recordVerdict: { BoostRedriveStore.setPendingFlag(verdictKey, $0, overridden: separateVotes) }
                 )
                 debug(.loop, "BoostV5 re-derivation: \(knob.rawValue) → \(r.reason)")
                 switchLines.append("\(knob.rawValue): \(r.reason)")

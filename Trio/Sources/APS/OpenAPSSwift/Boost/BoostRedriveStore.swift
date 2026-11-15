@@ -30,10 +30,30 @@ enum BoostRedriveStore {
 
     private static let baselineKey = "boost.redrive.baseline"
     private static let pendingKey = "boost.redrive.pending"
+    /// Votes cast by a run whose raise guard the person overrode. Kept apart so a scheduled run never
+    /// counts one towards its two-run confirmation; only another overridden run can.
+    private static let overridePendingKey = "boost.redrive.pending.override"
     private static let lastRunKey = "boost.redrive.lastRunMs"
     private static let writtenKey = "boost.redrive.written"
 
     private static let lock = NSLock()
+    private static var running = false
+
+    /// One evaluation at a time, scheduled or run by hand. A second started while one is in flight
+    /// would read the same pending votes and step the same caps twice.
+    static func tryBeginRun() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if running { return false }
+        running = true
+        return true
+    }
+
+    static func endRun() {
+        lock.lock()
+        defer { lock.unlock() }
+        running = false
+    }
 
     /// Whether an evaluation is due. The first call on a fresh install returns true, which records
     /// the baselines and writes no tracked knob.
@@ -67,12 +87,12 @@ enum BoostRedriveStore {
         update(baselineKey) { $0[knob.rawValue] = value }
     }
 
-    static func pending(_ knob: BoostAutoConfigKnob) -> Double? {
-        map(pendingKey)[knob.rawValue]
+    static func pending(_ knob: BoostAutoConfigKnob, overridden: Bool = false) -> Double? {
+        map(overridden ? overridePendingKey : pendingKey)[knob.rawValue]
     }
 
-    static func setPending(_ knob: BoostAutoConfigKnob, _ value: Double?) {
-        update(pendingKey) { $0[knob.rawValue] = value }
+    static func setPending(_ knob: BoostAutoConfigKnob, _ value: Double?, overridden: Bool = false) {
+        update(overridden ? overridePendingKey : pendingKey) { $0[knob.rawValue] = value }
     }
 
     static func lastWritten(_ knob: BoostAutoConfigKnob) -> Double? {
@@ -94,12 +114,12 @@ enum BoostRedriveStore {
     }
 
     /// Pending entries not tied to a knob, such as a window's previous verdict.
-    static func pendingFlag(_ key: String) -> Bool? {
-        map(pendingKey)[key].map { $0 >= 0.5 }
+    static func pendingFlag(_ key: String, overridden: Bool = false) -> Bool? {
+        map(overridden ? overridePendingKey : pendingKey)[key].map { $0 >= 0.5 }
     }
 
-    static func setPendingFlag(_ key: String, _ value: Bool?) {
-        update(pendingKey) { $0[key] = value.map { $0 ? 1.0 : 0.0 } }
+    static func setPendingFlag(_ key: String, _ value: Bool?, overridden: Bool = false) {
+        update(overridden ? overridePendingKey : pendingKey) { $0[key] = value.map { $0 ? 1.0 : 0.0 } }
     }
 
     /// Clear everything. Used by tests for isolation.
@@ -108,6 +128,7 @@ enum BoostRedriveStore {
         defer { lock.unlock() }
         UserDefaults.standard.removeObject(forKey: baselineKey)
         UserDefaults.standard.removeObject(forKey: pendingKey)
+        UserDefaults.standard.removeObject(forKey: overridePendingKey)
         UserDefaults.standard.removeObject(forKey: lastRunKey)
         UserDefaults.standard.removeObject(forKey: writtenKey)
     }
