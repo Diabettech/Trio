@@ -109,6 +109,18 @@ import Testing
         #expect(BoostRedriveStore.pending(.committedCapU, overridden: true) == 0.8)
     }
 
+    @Test("A run without the override clears the overridden votes") func ordinaryRunClearsOverriddenVotes() {
+        BoostRedriveStore.reset()
+        defer { BoostRedriveStore.reset() }
+        BoostRedriveStore.setPending(.committedCapU, 0.8)
+        BoostRedriveStore.setPending(.committedCapU, 0.8, overridden: true)
+        #expect(BoostRedriveStore.voteLedger(overrideLiftsGuard: true))
+        #expect(BoostRedriveStore.pending(.committedCapU, overridden: true) == 0.8)
+        #expect(!BoostRedriveStore.voteLedger(overrideLiftsGuard: false))
+        #expect(BoostRedriveStore.pending(.committedCapU, overridden: true) == nil)
+        #expect(BoostRedriveStore.pending(.committedCapU) == 0.8)
+    }
+
     @Test("Only one run at a time") func oneRunAtATime() {
         #expect(BoostRedriveStore.tryBeginRun())
         #expect(!BoostRedriveStore.tryBeginRun())

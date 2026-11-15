@@ -1301,8 +1301,10 @@ final class BaseAPSManager: APSManager, Injectable {
 
             // When the override lifts a guard that would otherwise hold, this run's votes go to a
             // separate ledger: a scheduled run must not complete a two-run confirmation with them.
-            let separateVotes = overrideHypoProtections &&
-                BoostV5AutoConfigApply.raiseGuardTripped(tbrBelow70Pct: tbr70, timeBelow54Pct: sev54)
+            let separateVotes = BoostRedriveStore.voteLedger(
+                overrideLiftsGuard: overrideHypoProtections &&
+                    BoostV5AutoConfigApply.raiseGuardTripped(tbrBelow70Pct: tbr70, timeBelow54Pct: sev54)
+            )
             var prefs = settingsManager.preferences
             let stock = Preferences()
             let resolutions = BoostV5AutoConfigApply.redrive(

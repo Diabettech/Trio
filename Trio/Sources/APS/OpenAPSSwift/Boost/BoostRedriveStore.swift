@@ -113,6 +113,18 @@ enum BoostRedriveStore {
         recordWritten(knob, value ? 1.0 : 0.0)
     }
 
+    /// Chooses the ledger a run votes in, once per run: the override ledger when the person's override
+    /// lifts a guard that would otherwise hold. Any other run clears that ledger, so an overridden vote
+    /// can be confirmed only by the very next run, as an ordinary vote is.
+    static func voteLedger(overrideLiftsGuard: Bool) -> Bool {
+        if !overrideLiftsGuard {
+            lock.lock()
+            defer { lock.unlock() }
+            UserDefaults.standard.removeObject(forKey: overridePendingKey)
+        }
+        return overrideLiftsGuard
+    }
+
     /// Pending entries not tied to a knob, such as a window's previous verdict.
     static func pendingFlag(_ key: String, overridden: Bool = false) -> Bool? {
         map(overridden ? overridePendingKey : pendingKey)[key].map { $0 >= 0.5 }

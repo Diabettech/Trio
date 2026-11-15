@@ -137,7 +137,9 @@ otherwise step a cap up within minutes. Its dialog has an
 apply the raise guard (time below 70 mg/dL over 4.0%, or below 54 mg/dL at 1.0% or more) to the dose
 caps, aggression, hypo caution, the cumulative cap, the primer, or the two insulin-adding switches. The
 deadband, the confirmation filter and every value's own bounds still apply. Scheduled runs never take
-the override. This can add insulin, and only when the person chooses it.
+the override. A run where the override lifts a guard keeps its votes (values waiting to repeat, and
+the two switches' verdicts) in a ledger of their own, and any other run clears that ledger, so an
+overridden vote is confirmed only by the very next run being overridden too. This can add insulin, and only when the person chooses it.
 
 A well‑controlled user lands on a fully neutral config (Aggression 1.0, HypoCaution 1.0, fast‑carb on);
 a low‑prone user gets gentler aggression, more hypo damping, tighter caps, and fast‑carb off — all in the
