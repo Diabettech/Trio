@@ -940,7 +940,7 @@ final class OpenAPS {
                                     inMealState: result.decision.mealHypothesis == .committed,
                                     hardGateFired: result.decision.phase3.reductions.hardGateFired != nil,
                                     postRescueWindow: inPostRescueWindow,
-                                    // AAPS min(boost_maxIOB, max_iob).
+                                    // Max IOB (AAPS uses min(boost_maxIOB, max_iob); Trio has no separate limit).
                                     ceilingU: ConfirmTranche.releaseCeiling(
                                         cycleDoseU: (sized as NSDecimalNumber).doubleValue,
                                         maxIobU: det.boostV1?.v6MaxIob ?? (preferences.maxIOB as NSDecimalNumber).doubleValue,

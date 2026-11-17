@@ -15,13 +15,13 @@ final class BoostV5AutoConfigTests: XCTestCase {
         manual: [Double] = [3, 3.5, 4, 4, 4.5, 5, 5, 5.5, 6, 6],
         smb: [Double] = [0.2, 0.3, 0.4, 0.6, 0.8],
         tbr70: Double = 3, sev54: Double = 0.4, meanBg: Double = 130,
-        maxIob: Double = 8, maxBolus: Double = 10
+        maxBolus: Double = 10
     ) -> BoostV5AutoConfig.PriorDosing {
         BoostV5AutoConfig.PriorDosing(
             daysWithData: days, bgReadingCount: bg, tddMedianU: tdd,
             manualBolusesU: manual, smbAmountsU: smb,
             tbrBelow70Pct: tbr70, timeBelow54Pct: sev54, meanGlucoseMgdl: meanBg,
-            currentMaxIobU: maxIob, currentMaxBolusU: maxBolus
+            currentMaxBolusU: maxBolus
         )
     }
 
@@ -111,9 +111,8 @@ final class BoostV5AutoConfigTests: XCTestCase {
         XCTAssertGreaterThan(s10.confirmedCapU, 1.5)
     }
 
-    func testMaxIobAndBolusCarriedAndClamped() {
-        let s = BoostV5AutoConfig.compute(prior(maxIob: 15, maxBolus: 12))!
-        XCTAssertEqual(s.maxIobU, 12.0)
+    func testBolusCarriedAndClamped() {
+        let s = BoostV5AutoConfig.compute(prior(maxBolus: 12))!
         XCTAssertEqual(s.bolusCapU, 10.0)
     }
 
@@ -157,7 +156,6 @@ final class BoostV5AutoConfigTests: XCTestCase {
         case .confirmedCapU: return 2.5
         case .committedCapU: return 0.5
         case .cumulativeSmbCap60Min: return 10.0
-        case .boostMaxIob: return 1.0
         case .boostBolus: return 2.5
         case .primerCapU: return 0.0 // derived from the committed cap; no separate factory value
         case .aggressiveEarlyConfirm,
@@ -410,7 +408,7 @@ final class BoostV5AutoConfigTests: XCTestCase {
             aggression: s.aggression, hypoCaution: s.hypoCaution,
             confirmedCapU: 7.0, committedCapU: 2.0,
             cumulativeSmbCap60MinU: s.cumulativeSmbCap60MinU,
-            maxIobU: s.maxIobU, bolusCapU: s.bolusCapU,
+            bolusCapU: s.bolusCapU,
             fastCarbConfirm: s.fastCarbConfirm,
             aggressiveEarlyConfirm: s.aggressiveEarlyConfirm,
             velocityBudgetFloor: s.velocityBudgetFloor,

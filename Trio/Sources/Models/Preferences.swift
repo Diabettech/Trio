@@ -67,11 +67,11 @@ struct Preferences: JSON, Equatable {
     // V1 tier-engine SMB sizing (AAPS DetermineBasalBoost). Not shown in the settings screens, as in
     // AAPS's V6 screen: V6 replaces V1's SMB on the cycles it runs, but V1's dose still bounds V6 in the
     // non-meal states and the post-rescue window, and is what is delivered whenever V6 stands aside.
-    // Defaults and ranges are AAPS's (DoubleKey ApsBoostBolus, ApsBoostMaxIob, ApsBoostInsulinReqPct,
-    // ApsBoostScale, ApsBoostPercentScale; BooleanKey ApsBoostEnablePercentScale, ApsBoostAllowWithHighTt).
-    // Auto-config carries the max IOB and the bolus cap from the user's own limits, as AAPS does.
+    // Defaults and ranges are AAPS's (DoubleKey ApsBoostBolus, ApsBoostInsulinReqPct, ApsBoostScale,
+    // ApsBoostPercentScale; BooleanKey ApsBoostEnablePercentScale, ApsBoostAllowWithHighTt). Auto-config
+    // carries the bolus cap from the user's max bolus, as AAPS does. AAPS's ApsBoostMaxIob has no Trio
+    // counterpart: Boost uses max IOB directly (BOOST.md, differences).
     var boostBolus: Decimal = 2.5 // 0.1…10 U, the per-SMB cap of Tiers 2 to 7
-    var boostMaxIOB: Decimal = 1.0 // 0.1…12 U, the IOB limit the tiers clamp to
     var boostInsulinReqPct: Decimal = 50 // 30…100 %, the share of insulinReq an SMB delivers
     var boostScale: Decimal = 1.0 // 0.1…3, multiplier on basal for the UAM and acceleration tiers
     var boostPercentScale: Decimal = 200 // 50…500 %, the percent-scale factor
@@ -246,7 +246,6 @@ extension Preferences {
         case boostDynIsfAdjustmentFactor
         case boostEnableCircadianIsf
         case boostBolus
-        case boostMaxIOB
         case boostInsulinReqPct
         case boostScale
         case boostPercentScale
@@ -557,9 +556,6 @@ extension Preferences: Decodable {
         }
         if let v = try? container.decode(Decimal.self, forKey: .boostBolus) {
             preferences.boostBolus = max(0.1, min(10, v))
-        }
-        if let v = try? container.decode(Decimal.self, forKey: .boostMaxIOB) {
-            preferences.boostMaxIOB = max(0.1, min(12, v))
         }
         if let v = try? container.decode(Decimal.self, forKey: .boostInsulinReqPct) {
             preferences.boostInsulinReqPct = max(30, min(100, v))

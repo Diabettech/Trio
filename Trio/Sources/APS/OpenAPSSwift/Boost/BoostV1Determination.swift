@@ -34,7 +34,8 @@ struct BoostV1Telemetry: Equatable {
     /// The target the engine was given, before its own autosens, hypo-prediction and high-BG
     /// adjustments. AAPS's V6 reads this (opb.target_bg), not V1's adjusted target.
     var inputTargetBg: Double
-    /// min(boost_maxIOB, max_iob), the IOB ceiling AAPS gives V6 and the confirm tranche.
+    /// The IOB ceiling V6 and the confirm tranche use: the user's max IOB. AAPS uses
+    /// min(boost_maxIOB, max_iob); Trio has no separate Boost max IOB (BOOST.md, differences).
     var v6MaxIob: Double
     var lgsThreshold: Double?
     /// Lowest glucose in the last 60 minutes (AAPS recentLowBG), 999 when there is none.
@@ -266,7 +267,8 @@ enum BoostV1Determination {
             boostActive: gate.active,
             profileSwitch: Int(profilePercent.rounded()),
             boostBolus: dbl(preferences.boostBolus) * recoveryScale,
-            boostMaxIOB: dbl(preferences.boostMaxIOB),
+            // Boost's IOB limit is the user's max IOB (Trio divergence from AAPS's separate boost_maxIOB).
+            boostMaxIOB: dbl(profile.maxIob),
             boostInsulinReq: dbl(preferences.boostInsulinReqPct),
             boostScale: dbl(preferences.boostScale) * recoveryScale,
             boostPercentScale: dbl(preferences.boostPercentScale),
@@ -384,7 +386,7 @@ enum BoostV1Determination {
             mlMealLikely: rT.mlMealLikely,
             mlRiskScale: rT.mlRiskScale,
             inputTargetBg: dbl((minBg + maxBg) / 2),
-            v6MaxIob: min(dbl(preferences.boostMaxIOB), dbl(profile.maxIob)),
+            v6MaxIob: dbl(profile.maxIob),
             lgsThreshold: dbl(profile.thresholdSetting),
             recentLowBg: recentLow60,
             boostActive: gate.active,

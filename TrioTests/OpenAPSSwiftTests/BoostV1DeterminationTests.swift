@@ -102,10 +102,11 @@ import Testing
         let det = try #require(try run(.active))
         let v1 = try #require(det.boostV1)
         #expect(det.reason.contains("Boost V1 tier \(v1.tier)"))
-        // The engine's inputs: profile target midpoint, min(boost_maxIOB 1.0 default, max_iob 6), the
+        // The engine's inputs: profile target midpoint, the user's max IOB of 6 (Boost has no separate,
+        // lower IOB limit; at the old hidden 1.0 U every daytime SMB stopped once IOB reached 1 U), the
         // LGS threshold, and the 60-minute low from the one reading.
         #expect(v1.inputTargetBg == 125)
-        #expect(v1.v6MaxIob == 1.0)
+        #expect(v1.v6MaxIob == 6.0)
         #expect(v1.lgsThreshold == 70)
         #expect(v1.recentLowBg == 120)
     }

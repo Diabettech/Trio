@@ -136,8 +136,8 @@ enum BoostV5Adapter {
         let activity = BoostActivityStore.shared.flags(now: clock)
 
         // V6's own target, IOB ceiling, hypo threshold and recent low are V1's inputs (AAPS opb.target_bg,
-        // min(opb.boost_maxIOB, opb.max_iob), opb.lgsThreshold ?: 80, opb.recentLowBG), not V1's
-        // adjusted outputs.
+        // opb.lgsThreshold ?: 80, opb.recentLowBG), not V1's adjusted outputs. The ceiling is max IOB,
+        // where AAPS uses min(opb.boost_maxIOB, opb.max_iob): Trio has no separate Boost max IOB.
         let v6TargetBg = v1?.inputTargetBg ?? targetBg
         let v6MaxIob = v1?.v6MaxIob ?? maxIob
         let v6Threshold = v1.map { $0.lgsThreshold ?? 80.0 } ?? minGuardThreshold

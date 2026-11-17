@@ -186,5 +186,6 @@ checklist in the global instructions and items 23 to 27 below.
 | Swinject resolver race crash in `HomeRootView.swift` during the soak, unrelated to Boost | Pre-existing; nothing yet |
 | An audit called the iOS automatic microbolus unbounded by Max Bolus, having read only the app | Item 6 |
 | Upstream's unit-test workflow runs only for the nightscout owner, so the fork has no CI gate; the `trio-fork-compliance` gate is not installed in this checkout | Nothing yet; items 18 to 20 by hand |
+| A hidden Boost max IOB at its 1 U default held every daytime Boost SMB to 0 U from 1 U on board (`BOOST.md`, Boost max IOB removed) | `BoostV1DeterminationTests` (V6 ceiling equals max IOB); the V1 tier input has no test of its own |
 
 A new incident adds a row here naming its check, or "nothing yet".
