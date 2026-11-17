@@ -1138,7 +1138,6 @@ final class BaseAPSManager: APSManager, Injectable {
         case .confirmedCapU: return dbl(p.boostV5ConfirmedCapU)
         case .committedCapU: return dbl(p.boostV5CommittedCapU)
         case .cumulativeSmbCap60Min: return dbl(p.boostCumulativeSmbCap60Min)
-        case .boostMaxIob: return dbl(p.boostMaxIOB)
         case .boostBolus: return dbl(p.boostBolus)
         case .primerCapU: return dbl(p.boostV5PrimerCapU)
         case .aggressiveEarlyConfirm,
@@ -1290,13 +1289,12 @@ final class BaseAPSManager: APSManager, Injectable {
                 }
             }
 
-            let maxIob = Double(truncating: settingsManager.preferences.maxIOB as NSNumber)
             let maxBolus = Double(truncating: settingsManager.pumpSettings.maxBolus as NSNumber)
             guard let s = BoostV5AutoConfig.compute(BoostV5AutoConfig.PriorDosing(
                 daysWithData: daysWithData, bgReadingCount: n, tddMedianU: tddMedian,
                 manualBolusesU: manual, smbAmountsU: smb,
                 tbrBelow70Pct: tbr70, timeBelow54Pct: sev54, meanGlucoseMgdl: meanBg,
-                currentMaxIobU: maxIob, currentMaxBolusU: maxBolus
+                currentMaxBolusU: maxBolus
             )) else {
                 debug(.loop, "BoostV5 re-derivation: insufficient history (days=\(daysWithData), bg=\(n))")
                 return ["Not enough history yet (\(daysWithData) days, \(n) readings), so nothing was changed."]
@@ -1326,7 +1324,6 @@ final class BaseAPSManager: APSManager, Injectable {
                     case .confirmedCapU: prefs.boostV5ConfirmedCapU = Decimal(value)
                     case .committedCapU: prefs.boostV5CommittedCapU = Decimal(value)
                     case .cumulativeSmbCap60Min: prefs.boostCumulativeSmbCap60Min = Decimal(value)
-                    case .boostMaxIob: prefs.boostMaxIOB = Decimal(value)
                     case .boostBolus: prefs.boostBolus = Decimal(value)
                     case .primerCapU: prefs.boostV5PrimerCapU = Decimal(value)
                     case .aggressiveEarlyConfirm,
@@ -1599,14 +1596,13 @@ final class BaseAPSManager: APSManager, Injectable {
                 }
             }
 
-            let maxIob = Double(truncating: settingsManager.preferences.maxIOB as NSNumber)
             let maxBolus = Double(truncating: settingsManager.pumpSettings.maxBolus as NSNumber)
 
             guard let s = BoostV5AutoConfig.compute(BoostV5AutoConfig.PriorDosing(
                 daysWithData: daysWithData, bgReadingCount: n, tddMedianU: tddMedian,
                 manualBolusesU: manual, smbAmountsU: smb,
                 tbrBelow70Pct: tbr70, timeBelow54Pct: sev54, meanGlucoseMgdl: meanBg,
-                currentMaxIobU: maxIob, currentMaxBolusU: maxBolus
+                currentMaxBolusU: maxBolus
             )) else {
                 // Nothing resolves here: every open knob stays eligible and genuinely retries next cycle.
                 debug(.loop, "BoostV5 auto-config: insufficient history (days=\(daysWithData), bg=\(n)) — will retry")
@@ -1640,7 +1636,6 @@ final class BaseAPSManager: APSManager, Injectable {
                     case .confirmedCapU: prefs.boostV5ConfirmedCapU = Decimal(value)
                     case .committedCapU: prefs.boostV5CommittedCapU = Decimal(value)
                     case .cumulativeSmbCap60Min: prefs.boostCumulativeSmbCap60Min = Decimal(value)
-                    case .boostMaxIob: prefs.boostMaxIOB = Decimal(value)
                     case .boostBolus: prefs.boostBolus = Decimal(value)
                     case .primerCapU: prefs.boostV5PrimerCapU = Decimal(value)
                     case .aggressiveEarlyConfirm,

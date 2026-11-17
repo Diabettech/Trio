@@ -72,6 +72,10 @@ struct FeatureSettingsView: BaseView {
                         title: "Hypo Caution", info: BoostSettingInfo.hypoCaution,
                         value: $state.boostV5HypoCaution, range: 1.0 ... 2.0, step: 0.05
                     )
+                    BoostSliderRow(
+                        title: "Boost max IOB (U)", info: BoostSettingInfo.boostMaxIob,
+                        value: $state.boostMaxIOB, range: 0.1 ... 12, step: 0.1
+                    )
                 }
                 .listRowBackground(Color.chart)
 
@@ -532,6 +536,8 @@ private enum BoostSettingInfo {
         "Auto-config re-derives the dose caps, aggression and hypo caution from the last 28 days of your own history. It runs by itself every 7 days; this runs it now and shows what it did. It needs Boost Active, first set-up finished, and 24 hours since the last run. A raise is held back while time below 70 mg/dL is over 4.0% or time below 54 mg/dL is 1.0% or more."
     static let overrideHypoProtections =
         "Lets this one run raise the dose caps and aggression, lower hypo caution, and switch on Confirm sooner and Fast-carb confirm even though your time below 70 or 54 mg/dL is over the limit that normally holds them back. Lowerings still apply, and every value stays inside its own limits. The automatic runs keep the protections."
+    static let boostMaxIob =
+        "The most insulin on board at which Boost may still add an SMB. Boost uses this or your max IOB, whichever is lower, so at the default of 12 U it uses your max IOB and follows it when it changes. Set a lower value to hold Boost below max IOB. Default: 12 U. Range 0.1–12 U."
     static let sensitivity =
         "Scales the per-cycle insulin (aggression) budget. 1.0 = default; below 1.0 for sensitive users, above for resistant. Range 0.8–1.2."
     static let confirmedCap = "Hard upper limit on the confirmed meal SMB. Default: 2.5 U"

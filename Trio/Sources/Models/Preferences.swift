@@ -64,14 +64,21 @@ struct Preferences: JSON, Equatable {
     var boostDynIsfVelocity: Decimal = 100 // percent
     var boostDynIsfAdjustmentFactor: Decimal = 100 // percent
     var boostEnableCircadianIsf: Bool = false
-    // V1 tier-engine SMB sizing (AAPS DetermineBasalBoost). Not shown in the settings screens, as in
-    // AAPS's V6 screen: V6 replaces V1's SMB on the cycles it runs, but V1's dose still bounds V6 in the
+    // V1 tier-engine SMB sizing (AAPS DetermineBasalBoost). Not shown in the settings screens, apart from
+    // Boost max IOB: V6 replaces V1's SMB on the cycles it runs, but V1's dose still bounds V6 in the
     // non-meal states and the post-rescue window, and is what is delivered whenever V6 stands aside.
     // Defaults and ranges are AAPS's (DoubleKey ApsBoostBolus, ApsBoostMaxIob, ApsBoostInsulinReqPct,
     // ApsBoostScale, ApsBoostPercentScale; BooleanKey ApsBoostEnablePercentScale, ApsBoostAllowWithHighTt).
-    // Auto-config carries the max IOB and the bolus cap from the user's own limits, as AAPS does.
+    // Auto-config carries the bolus cap from the user's max bolus, as AAPS does.
     var boostBolus: Decimal = 2.5 // 0.1…10 U, the per-SMB cap of Tiers 2 to 7
-    var boostMaxIOB: Decimal = 1.0 // 0.1…12 U, the IOB limit the tiers clamp to
+    /// 0.1…12 U. Boost uses min(this, max IOB), so the default of 12, the maximum, uses max IOB and a
+    /// lower value is the person's own limit (AAPS ApsBoostMaxIob, same default). Not a 0 sentinel: an
+    /// older build reads the stored value raw, and 12 stays bounded by max IOB where 0 stops Boost.
+    var boostMaxIOB: Decimal = 12
+    /// Written as true with every save. A stored file without it predates the 12 default, when the
+    /// value was hidden and so the 1.0 U factory value, an onboarding copy or an imported value, never
+    /// a choice; decoding such a file sets it to 12 once.
+    var boostMaxIOBMigrated: Bool = true
     var boostInsulinReqPct: Decimal = 50 // 30…100 %, the share of insulinReq an SMB delivers
     var boostScale: Decimal = 1.0 // 0.1…3, multiplier on basal for the UAM and acceleration tiers
     var boostPercentScale: Decimal = 200 // 50…500 %, the percent-scale factor
@@ -247,6 +254,7 @@ extension Preferences {
         case boostEnableCircadianIsf
         case boostBolus
         case boostMaxIOB
+        case boostMaxIOBMigrated
         case boostInsulinReqPct
         case boostScale
         case boostPercentScale
@@ -558,7 +566,9 @@ extension Preferences: Decodable {
         if let v = try? container.decode(Decimal.self, forKey: .boostBolus) {
             preferences.boostBolus = max(0.1, min(10, v))
         }
-        if let v = try? container.decode(Decimal.self, forKey: .boostMaxIOB) {
+        if (try? container.decode(Bool.self, forKey: .boostMaxIOBMigrated)) == true,
+           let v = try? container.decode(Decimal.self, forKey: .boostMaxIOB)
+        {
             preferences.boostMaxIOB = max(0.1, min(12, v))
         }
         if let v = try? container.decode(Decimal.self, forKey: .boostInsulinReqPct) {

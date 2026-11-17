@@ -58,14 +58,13 @@ public enum BoostV5AutoConfig {
         public let tbrBelow70Pct: Double
         public let timeBelow54Pct: Double
         public let meanGlucoseMgdl: Double
-        public let currentMaxIobU: Double
         public let currentMaxBolusU: Double
 
         public init(
             daysWithData: Int, bgReadingCount: Int, tddMedianU: Double,
             manualBolusesU: [Double], smbAmountsU: [Double],
             tbrBelow70Pct: Double, timeBelow54Pct: Double, meanGlucoseMgdl: Double,
-            currentMaxIobU: Double, currentMaxBolusU: Double
+            currentMaxBolusU: Double
         ) {
             self.daysWithData = daysWithData
             self.bgReadingCount = bgReadingCount
@@ -75,7 +74,6 @@ public enum BoostV5AutoConfig {
             self.tbrBelow70Pct = tbrBelow70Pct
             self.timeBelow54Pct = timeBelow54Pct
             self.meanGlucoseMgdl = meanGlucoseMgdl
-            self.currentMaxIobU = currentMaxIobU
             self.currentMaxBolusU = currentMaxBolusU
         }
     }
@@ -87,7 +85,6 @@ public enum BoostV5AutoConfig {
         public let confirmedCapU: Double
         public let committedCapU: Double
         public let cumulativeSmbCap60MinU: Double
-        public let maxIobU: Double
         public let bolusCapU: Double
         public let fastCarbConfirm: Bool
         /// Insulin-adding opt-in switches, enabled only for a clearly well-controlled history.
@@ -139,9 +136,8 @@ public enum BoostV5AutoConfig {
         let cumulativeSmbCap60MinU = cumulativeCap60Min(confirmedCapU: confirmedCapU, committedCapU: committedCapU)
         reasons.append("Cumulative SMB cap/60min \(cumulativeSmbCap60MinU)U (limits dose frequency)")
 
-        let maxIobU = round1(min(max(p.currentMaxIobU, 0.1), 12.0))
         let bolusCapU = round1(min(max(p.currentMaxBolusU, 0.1), 10.0))
-        reasons.append("maxIOB \(maxIobU)U / bolus cap \(bolusCapU)U carried from your settings")
+        reasons.append("Bolus cap \(bolusCapU)U carried from your settings")
 
         let fastCarbConfirm = !hypoProne
         if hypoProne { reasons.append("Fast-carb confirm OFF (cautious start — notable hypo history)") }
@@ -198,7 +194,7 @@ public enum BoostV5AutoConfig {
             aggression: aggression, hypoCaution: hypoCaution,
             confirmedCapU: confirmedCapU, committedCapU: committedCapU,
             cumulativeSmbCap60MinU: cumulativeSmbCap60MinU,
-            maxIobU: maxIobU, bolusCapU: bolusCapU,
+            bolusCapU: bolusCapU,
             fastCarbConfirm: fastCarbConfirm,
             aggressiveEarlyConfirm: aggressiveEarlyConfirm,
             velocityBudgetFloor: velocityBudgetFloor,

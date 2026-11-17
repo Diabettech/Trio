@@ -192,7 +192,7 @@ final class VelocityBudgetFloorTests: XCTestCase {
             manualBolusesU: Array(repeating: 6.0, count: 20),
             smbAmountsU: Array(repeating: 0.4, count: 200),
             tbrBelow70Pct: tbr70, timeBelow54Pct: sev54, meanGlucoseMgdl: 140,
-            currentMaxIobU: 8, currentMaxBolusU: 10
+            currentMaxBolusU: 10
         )
     }
 

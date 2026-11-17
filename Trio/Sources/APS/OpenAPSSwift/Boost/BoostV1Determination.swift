@@ -34,7 +34,7 @@ struct BoostV1Telemetry: Equatable {
     /// The target the engine was given, before its own autosens, hypo-prediction and high-BG
     /// adjustments. AAPS's V6 reads this (opb.target_bg), not V1's adjusted target.
     var inputTargetBg: Double
-    /// min(boost_maxIOB, max_iob), the IOB ceiling AAPS gives V6 and the confirm tranche.
+    /// min(Boost max IOB, max IOB), the IOB ceiling AAPS gives V6 and the confirm tranche.
     var v6MaxIob: Double
     var lgsThreshold: Double?
     /// Lowest glucose in the last 60 minutes (AAPS recentLowBG), 999 when there is none.
@@ -51,6 +51,13 @@ struct BoostV1Telemetry: Equatable {
 enum BoostV1Determination {
     private static func dbl(_ d: Decimal) -> Double { (d as NSDecimalNumber).doubleValue }
     private static func dbl(_ d: Decimal?) -> Double? { d.map { ($0 as NSDecimalNumber).doubleValue } }
+
+    /// Boost's IOB limit: min(Boost max IOB, max IOB), read on every cycle, so at the 12 U default it
+    /// follows a change to max IOB (up to 12) and is 0 in a dosing mode that sets max IOB to 0. Passed
+    /// to V1 already reduced, as AAPS passes boost_maxIOB, so its tier guards see the operative limit.
+    static func boostMaxIob(preferences: Preferences, profile: Profile) -> Double {
+        min(dbl(preferences.boostMaxIOB), dbl(profile.maxIob))
+    }
 
     /// Lowest glucose in the last 60 minutes (AAPS recentLowBG), 999 when there is no reading.
     static func recentLowBg60Min(_ glucose: [BloodGlucose], now: Date) -> Double {
@@ -266,7 +273,7 @@ enum BoostV1Determination {
             boostActive: gate.active,
             profileSwitch: Int(profilePercent.rounded()),
             boostBolus: dbl(preferences.boostBolus) * recoveryScale,
-            boostMaxIOB: dbl(preferences.boostMaxIOB),
+            boostMaxIOB: boostMaxIob(preferences: preferences, profile: profile),
             boostInsulinReq: dbl(preferences.boostInsulinReqPct),
             boostScale: dbl(preferences.boostScale) * recoveryScale,
             boostPercentScale: dbl(preferences.boostPercentScale),
@@ -384,7 +391,7 @@ enum BoostV1Determination {
             mlMealLikely: rT.mlMealLikely,
             mlRiskScale: rT.mlRiskScale,
             inputTargetBg: dbl((minBg + maxBg) / 2),
-            v6MaxIob: min(dbl(preferences.boostMaxIOB), dbl(profile.maxIob)),
+            v6MaxIob: boostMaxIob(preferences: preferences, profile: profile),
             lgsThreshold: dbl(profile.thresholdSetting),
             recentLowBg: recentLow60,
             boostActive: gate.active,

@@ -27,8 +27,9 @@ import Testing
         return p
     }
 
-    private func preferences(_ mode: BoostMode) -> Preferences {
+    private func preferences(_ mode: BoostMode, boostMaxIOB: Decimal = 12) -> Preferences {
         var p = Preferences()
+        p.boostMaxIOB = boostMaxIOB
         p.curve = .rapidActing
         p.useCustomPeakTime = false
         p.boostMode = mode
@@ -70,7 +71,8 @@ import Testing
         _ mode: BoostMode,
         smbIsOff: Bool = false,
         glucose: Decimal = 190,
-        delta: Decimal = 6
+        delta: Decimal = 6,
+        boostMaxIOB: Decimal = 12
     ) throws -> Determination? {
         let readingTime = now.addingTimeInterval(-1800)
         let readings = [BloodGlucose(
@@ -78,7 +80,7 @@ import Testing
         )]
         return try DeterminationGenerator.determineBasal(
             profile: profile(),
-            preferences: preferences(mode),
+            preferences: preferences(mode, boostMaxIOB: boostMaxIOB),
             currentTemp: TempBasal(duration: 0, rate: 0, temp: .absolute, timestamp: now),
             iobData: iob(0.2),
             mealData: ComputedCarbs(
@@ -102,12 +104,60 @@ import Testing
         let det = try #require(try run(.active))
         let v1 = try #require(det.boostV1)
         #expect(det.reason.contains("Boost V1 tier \(v1.tier)"))
-        // The engine's inputs: profile target midpoint, min(boost_maxIOB 1.0 default, max_iob 6), the
-        // LGS threshold, and the 60-minute low from the one reading.
+        // The engine's inputs: profile target midpoint, the 12 U default Boost max IOB reduced to max IOB 6
+        // (at the old hidden 1.0 U every daytime SMB stopped once IOB reached 1 U), the LGS threshold, and
+        // the 60-minute low from the one reading.
         #expect(v1.inputTargetBg == 125)
-        #expect(v1.v6MaxIob == 1.0)
+        #expect(v1.v6MaxIob == 6.0)
         #expect(v1.lgsThreshold == 70)
         #expect(v1.recentLowBg == 120)
+    }
+
+    @Test("The V1 tiers see the set Boost max IOB") func v1TiersSeeBoostMaxIob() throws {
+        // IOB 0.2 U: at the default the UAM tier fires; a limit of 0.3 leaves it 0.1 U of headroom, and
+        // a limit of 0.1, below IOB, locks every Boost tier out so the engine falls to enhanced oref1.
+        let open = try #require(try run(.active))
+        #expect(open.boostV1?.tier == "UAM_HIGH_BOOST")
+        let clamped = try #require(try run(.active, boostMaxIOB: 0.3))
+        #expect(clamped.boostV1?.tier == "UAM_HIGH_BOOST")
+        #expect((clamped.units ?? 0) < (open.units ?? 0))
+        let locked = try #require(try run(.active, boostMaxIOB: 0.1))
+        #expect(locked.boostV1?.tier != "UAM_HIGH_BOOST")
+        // The 12 U default survives a save and reload unchanged.
+        let reloaded = try JSONDecoder().decode(Preferences.self, from: JSONEncoder().encode(Preferences()))
+        #expect(reloaded.boostMaxIOB == 12)
+    }
+
+    @Test("A set Boost max IOB is a lower limit; max IOB still caps it") func setBoostMaxIobIsALimit() throws {
+        let lower = try #require(try run(.active, boostMaxIOB: 2)?.boostV1)
+        #expect(lower.v6MaxIob == 2.0)
+        let higher = try #require(try run(.active, boostMaxIOB: 10)?.boostV1)
+        #expect(higher.v6MaxIob == 6.0)
+        var prefs = Preferences()
+        var profile = profile()
+        #expect(BoostV1Determination.boostMaxIob(preferences: prefs, profile: profile) == 6.0)
+        profile.maxIob = 9 // the default follows a change to max IOB on the next cycle
+        #expect(BoostV1Determination.boostMaxIob(preferences: prefs, profile: profile) == 9.0)
+        profile.maxIob = 15 // but no further than the setting's own 12 U maximum
+        #expect(BoostV1Determination.boostMaxIob(preferences: prefs, profile: profile) == 12.0)
+        prefs.boostMaxIOB = 3
+        #expect(BoostV1Determination.boostMaxIob(preferences: prefs, profile: profile) == 3.0)
+    }
+
+    @Test("A file from before the 12 U default migrates once; a saved value survives") func boostMaxIobMigration() throws {
+        func decode(_ json: String) throws -> Preferences {
+            try JSONDecoder().decode(Preferences.self, from: Data(json.utf8))
+        }
+        // The hidden setting was the factory 1.0 or an auto-config copy, never a choice.
+        #expect(try decode(#"{"boostMaxIOB": 1.0}"#).boostMaxIOB == 12)
+        #expect(try decode(#"{"boostMaxIOB": 8.0}"#).boostMaxIOB == 12)
+        #expect(try decode(#"{"boostMaxIOB": 3.0, "boostMaxIOBMigrated": true}"#).boostMaxIOB == 3)
+        #expect(try decode(#"{"boostMaxIOB": 30, "boostMaxIOBMigrated": true}"#).boostMaxIOB == 12)
+        #expect(try decode(#"{"boostMaxIOB": 0, "boostMaxIOBMigrated": true}"#).boostMaxIOB == 0.1)
+        var set = Preferences()
+        set.boostMaxIOB = 4
+        let roundTrip = try JSONDecoder().decode(Preferences.self, from: JSONEncoder().encode(set))
+        #expect(roundTrip.boostMaxIOB == 4)
     }
 
     @Test("Shadow and off keep the stock determination") func stockPathUnchanged() throws {

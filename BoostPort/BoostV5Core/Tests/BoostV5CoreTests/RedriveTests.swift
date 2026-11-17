@@ -48,7 +48,7 @@ final class RedriveTests: XCTestCase {
             cumulativeSmbCap60MinU: BoostV5AutoConfig.cumulativeCap60Min(
                 confirmedCapU: confirmedCapU, committedCapU: committedCapU
             ),
-            maxIobU: 8, bolusCapU: 10, fastCarbConfirm: true,
+            bolusCapU: 10, fastCarbConfirm: true,
             aggressiveEarlyConfirm: false, velocityBudgetFloor: false,
             primerCapU: primerCapU, primerTbrFallback: false, rationale: []
         )

@@ -24,6 +24,7 @@ extension Settings {
         @Published var boostMode: BoostMode = .off
         @Published var boostV5Aggression: Decimal = 1.0
         @Published var boostV5HypoCaution: Decimal = 1.0
+        @Published var boostMaxIOB: Decimal = 12
         @Published var boostV5Sensitivity: Decimal = 1.0
         @Published var boostV5ConfirmedCapU: Decimal = 2.5
         @Published var boostV5CommittedCapU: Decimal = 0.5
@@ -104,6 +105,7 @@ extension Settings {
             )
             subscribePreferencesSetting(\.boostV5Aggression, on: $boostV5Aggression) { boostV5Aggression = $0 }
             subscribePreferencesSetting(\.boostV5HypoCaution, on: $boostV5HypoCaution) { boostV5HypoCaution = $0 }
+            subscribePreferencesSetting(\.boostMaxIOB, on: $boostMaxIOB) { boostMaxIOB = $0 }
             subscribePreferencesSetting(\.boostV5Sensitivity, on: $boostV5Sensitivity) { boostV5Sensitivity = $0 }
             subscribePreferencesSetting(\.boostV5ConfirmedCapU, on: $boostV5ConfirmedCapU) { boostV5ConfirmedCapU = $0 }
             subscribePreferencesSetting(\.boostV5CommittedCapU, on: $boostV5CommittedCapU) { boostV5CommittedCapU = $0 }

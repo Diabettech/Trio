@@ -186,7 +186,7 @@ checklist in the global instructions and items 23 to 27 below.
 | Swinject resolver race crash in `HomeRootView.swift` during the soak, unrelated to Boost | Pre-existing; nothing yet |
 | An audit called the iOS automatic microbolus unbounded by Max Bolus, having read only the app | Item 6 |
 | Upstream's unit-test workflow runs only for the nightscout owner, so the fork has no CI gate; the `trio-fork-compliance` gate is not installed in this checkout | Nothing yet; items 18 to 20 by hand |
-| A hidden Boost max IOB at its 1 U default held every daytime Boost SMB to 0 U from 1 U on board until onboarding copied max IOB into it | Nothing yet; open |
+| A hidden Boost max IOB at its 1 U default held every daytime Boost SMB to 0 U from 1 U on board until onboarding copied max IOB into it | `BoostV1DeterminationTests`: the default follows max IOB up to 12 U, a set value is a limit in V6 and in V1's tiers, and a pre-change file migrates to 12 once |
 | Auto-config read the newest 6,000 or 12,000 glucose readings, so a one-minute CGM showed about 4 days and onboarding never ran | Nothing yet; the reads have no count limit |
 | Time-below-range is counted per reading, so a window spanning a 5-minute to 1-minute CGM change weights the 1-minute days five times | Pre-existing; nothing yet |
 
