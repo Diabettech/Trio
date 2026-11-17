@@ -605,7 +605,8 @@ final class BaseAPSManager: APSManager, Injectable {
                     let bgs = try self.fetchGlucose(
                         on: floorContext,
                         predicate: NSPredicate(format: "date >= %@", since as NSDate),
-                        fetchLimit: 6000
+                        // No count limit: on a one-minute CGM a cap kept only the newest few days.
+                        batchSize: 1000
                     )
                     return bgs.compactMap { Int($0.glucose) }.filter { (20 ... 600).contains($0) }
                 }
@@ -1248,7 +1249,9 @@ final class BaseAPSManager: APSManager, Injectable {
                 let glucose = try self.fetchGlucose(
                     on: glucoseContext,
                     predicate: NSPredicate(format: "date >= %@", since as NSDate),
-                    fetchLimit: 12000
+                    // No count limit: a one-minute CGM stores 1,440 readings a day, and a cap kept
+                    // only the newest few days, so the history never reached the 7-day minimum.
+                    batchSize: 1000
                 )
                 let values = glucose.compactMap { Int($0.glucose) }.filter { (20 ... 600).contains($0) }
                 guard !values.isEmpty else { return nil }
@@ -1556,7 +1559,9 @@ final class BaseAPSManager: APSManager, Injectable {
                 let glucose = try self.fetchGlucose(
                     on: glucoseContext,
                     predicate: NSPredicate(format: "date >= %@", since as NSDate),
-                    fetchLimit: 6000
+                    // No count limit: a one-minute CGM stores 1,440 readings a day, and a cap kept
+                    // only the newest few days, so the history never reached the 7-day minimum.
+                    batchSize: 1000
                 )
                 let values = glucose.compactMap { Int($0.glucose) }.filter { (20 ... 600).contains($0) }
                 guard !values.isEmpty else { return nil }
