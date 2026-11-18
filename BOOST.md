@@ -2,7 +2,7 @@
 
 A faithful functional port of the AndroidAPS **"Boost"** algorithm into [Trio](https://github.com/nightscout/Trio) (iOS). It runs as an optional, mode-gated second pass over Trio's existing oref determination — so stock Trio behaviour is preserved unless you explicitly turn Boost **Active**.
 
-> **Branch:** `Boost-in-Trio-v0.1`
+> **Branches** (tim2000s/Trio, from 18 November 2026): `main` and `dev` follow nightscout's; `dev` also carries Adaptive Smoothing (PR #1302's branch `adaptive-smoothing`). `boost-in-trio` is `dev` plus Boost, and every Boost change lands there; nightscout `dev` is merged into `dev` and then `dev` into `boost-in-trio`. Earlier branches are kept as `archive/<name>` tags.
 > **Source of truth:** the AndroidAPS branch `Boost-V6-mealtime-alpha` (a V5‑dosing build) — the port is verified line‑by‑line against it, not against upstream AndroidAPS.
 
 ---
