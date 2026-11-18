@@ -1,7 +1,7 @@
 @testable import BoostV5Core
 import XCTest
 
-/// A person with no HR feed (AAPS Boost 6.3.3, 153ef9fef4, SleepNoHrFeedTest). The no-HR fallback
+/// A person with no HR feed (AAPS Boost 6.3.3, ecaad5ec6b, SleepNoHrFeedTest). The no-HR fallback
 /// qualified as soon as candidacy opened 90 min before nightStart, and the pre-window hold kept it,
 /// so an evening at the table was SLEEPING. Without a feed the HR rules do not apply and sleep starts
 /// only from nightStart. Night 20:00 to 07:00, no HR readings, no steps, five-minute cycles from 18:00.
@@ -67,5 +67,33 @@ final class SleepNoHrFeedTests: XCTestCase {
             ),
             18 * 60 + 40
         )
+    }
+}
+
+/// A steps wake starts the step history empty (AAPS SleepStateDetector.kt 687), so the steps that
+/// woke the person cannot end a return to sleep without new movement. Found by
+/// SleepNoHrReplayParityTests: Trio carried the history and woke again on 331 cycles where AAPS slept.
+final class SleepStepsWakeResetTests: XCTestCase {
+    func testAStepsWakeStartsTheStepHistoryEmpty() {
+        let minute = 60000.0, t0 = 1_000_000_000_000.0
+        // 02:00, no HR (drought), so the strong steps rule can wake; 300 steps arrive at once.
+        var state = SleepDetectorState(state: .sleeping, enteredAtMs: t0 - 120 * minute)
+        var steps = 0
+        for c in 0 ..< 4 {
+            if c == 1 { steps = 300 }
+            state = SleepStateDetector.step(
+                SleepDetectorInputs(
+                    hrReadings: [], restingHeartRate: 60, steps15min: 0, nowMinuteOfDay: 120 + 5 * c,
+                    nightStartMinute: 22 * 60, nightEndMinute: 7 * 60, preSleepLeadMin: 60,
+                    sleepHysteresisMin: 10, wakeHrHysteresisMin: 5, mlMealLikely: nil, nowMs: t0 + Double(5 * c) * minute,
+                    autoBySleep: true, stepsToday: steps
+                ),
+                state
+            )
+            if state.state == .awake { break }
+        }
+        XCTAssertEqual(state.state, .awake)
+        XCTAssertEqual(state.wakeReason, "steps")
+        XCTAssertEqual(state.stepSamples, [])
     }
 }

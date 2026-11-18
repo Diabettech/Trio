@@ -255,7 +255,7 @@ public struct SleepDetectorInputs {
     public var sleepInWindowMin: Int
     /// False when the host has seen no valid HR in `hrFeedLookbackHours`. Without a feed the HR rules
     /// do not apply: sleep can start only from nightStart, on the clock with the step and meal gates
-    /// (AAPS Boost 6.3.3, 153ef9fef4).
+    /// (AAPS Boost 6.3.3, ecaad5ec6b).
     public var hrFeedPresent: Bool
 
     public init(
@@ -553,14 +553,16 @@ public enum SleepStateDetector {
                     } else {
                         let heldMin = Int((inputs.nowMs - newState.wakeCandidateSinceMs!) / C.msPerMinute)
                         if heldMin >= inputs.wakeHrHysteresisMin {
+                            // The step history and HR streak start empty, as AAPS does (SleepStateDetector.kt
+                            // 687): the steps that ended this sleep would otherwise stay in the 60-min
+                            // lookback and end a return to sleep with no new movement.
                             newState = SleepDetectorState(
                                 state: .awake, enteredAtMs: inputs.nowMs,
                                 lastFreshHrSampleMs: newState.lastFreshHrSampleMs,
                                 // all genuine wakes; the learner trains on hr_steps and steps only
                                 wakeReason: gentleWake ? "hr_steps"
                                     : strongStepsWake ? "steps"
-                                    : preWindowHrWake ? "pw_hr_steps" : "pw_steps",
-                                stepSamples: newState.stepSamples, hrHighStreak: newState.hrHighStreak
+                                    : preWindowHrWake ? "pw_hr_steps" : "pw_steps"
                             )
                             transitioned = true
                         }
