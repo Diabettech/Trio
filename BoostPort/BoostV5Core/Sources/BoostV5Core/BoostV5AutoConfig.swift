@@ -13,10 +13,11 @@ import Foundation
 /// caps) bound rather than embolden; proven maxIOB/bolus carried over; aggression refines once shadow
 /// data exists.
 public enum BoostV5AutoConfig {
-    /// The highest committed cap auto-config sets, at onboarding and in the weekly re-derivation. The
-    /// setting goes up to 5.0 U, so a larger hold is possible, but only a person can set one
-    /// (AAPS Boost 6.3.3 COMMITTED_CAP_AUTO_MAX).
-    public static let committedCapAutoMax = 2.5
+    /// The committed cap and primer settings' maxima (their slider and decode ranges). Auto-config
+    /// uses the committed cap's whole range, at onboarding and in the weekly re-derivation, and holds
+    /// the primer to its own (AAPS Boost 6.3.3 9bb6404df2, which removed COMMITTED_CAP_AUTO_MAX).
+    public static let committedCapMaxU = 5.0
+    public static let primerCapMaxU = 2.5
     public static let minDays = 7
     public static let minBgReadings = 1500 // ~7 days of 5-min CGM minus gaps
     private static let tbr70Target = 4.0 // % time <70 mg/dL
@@ -96,6 +97,9 @@ public enum BoostV5AutoConfig {
         public let velocityBudgetFloor: Bool
         /// Early-primer ceiling in units, 0 meaning off, and the delivery routing.
         public let primerCapU: Double
+        /// The policy fraction of the committed cap. primerCapU / committedCapU differs from it once the
+        /// primer is held to its own maximum, so sizing from a committed cap takes this instead.
+        public let primerFrac: Double
         public let primerTbrFallback: Bool
         public let rationale: [String]
     }
@@ -133,8 +137,9 @@ public enum BoostV5AutoConfig {
         let confirmedCapU = round2(min(max(max(manualP90, percentile(p.smbAmountsU, 95)), 1.5), 7.5))
         reasons.append("Confirmed cap \(confirmedCapU)U (≈ your biggest typical single dose)")
 
-        // Committed cap [0.25..committedCapAutoMax]: routine per-cycle hold = max(typical SMB p75, TDD/40), floored.
-        let committedCapU = round2(min(max(max(percentile(p.smbAmountsU, 75), p.tddMedianU / 40.0), 0.25), committedCapAutoMax))
+        // Committed cap [0.25..committedCapMaxU]: routine per-cycle hold = max(typical SMB p75, TDD/40), floored.
+        // It passes 2.5 U only above a median TDD of 100 U or an SMB 75th percentile above 2.5 U.
+        let committedCapU = round2(min(max(max(percentile(p.smbAmountsU, 75), p.tddMedianU / 40.0), 0.25), committedCapMaxU))
         reasons.append("Committed cap \(committedCapU)U (max of your routine SMB size and TDD/40)")
 
         let cumulativeSmbCap60MinU = cumulativeCap60Min(confirmedCapU: confirmedCapU, committedCapU: committedCapU)
@@ -176,8 +181,9 @@ public enum BoostV5AutoConfig {
         // The bound is one commit shot. The primer is an advance on the CONFIRMED shot, so it
         // should never exceed the shot it advances. Since the fraction is at most 0.75 this is an
         // invariant rather than a cutoff, and it scales in the person's own units because the
-        // committed cap is derived from their own dose distribution.
-        let primerCapU = round2(min(max(committedCapU * primerFrac, 0), committedCapU))
+        // committed cap is derived from their own dose distribution. A committed cap above 3.33 U would
+        // derive a primer past the primer setting's maximum, so the primer is held to that as well.
+        let primerCapU = round2(min(max(committedCapU * primerFrac, 0), min(committedCapU, primerCapMaxU)))
         // Only a clearly well-controlled history routes to the bolus. That makes the bolus route
         // inherently safe on time-below-range, which is why the primer cap is not raise-guarded:
         // the routing is the safety differentiator rather than a cap. A user can force the bolus.
@@ -203,6 +209,7 @@ public enum BoostV5AutoConfig {
             aggressiveEarlyConfirm: aggressiveEarlyConfirm,
             velocityBudgetFloor: velocityBudgetFloor,
             primerCapU: primerCapU,
+            primerFrac: primerFrac,
             primerTbrFallback: primerTbrFallback,
             rationale: reasons
         )

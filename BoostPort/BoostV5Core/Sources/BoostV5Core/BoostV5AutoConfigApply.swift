@@ -253,9 +253,8 @@ public enum BoostV5AutoConfigApply {
         // committed cap rather than the derivation's own, for the same reason the cumulative cap is.
         // The primer is an advance on the commit shot, so a kept user cap must bound it too.
         if suggestion.committedCapU > 0 {
-            let frac = suggestion.primerCapU / suggestion.committedCapU
-            let sized = (operative[.committedCapU]! * frac * 100).rounded() / 100
-            resolve(.primerCapU, min(max(sized, 0), operative[.committedCapU]!))
+            let sized = (operative[.committedCapU]! * suggestion.primerFrac * 100).rounded() / 100
+            resolve(.primerCapU, min(max(sized, 0), min(operative[.committedCapU]!, BoostV5AutoConfig.primerCapMaxU)))
         } else {
             resolve(.primerCapU, suggestion.primerCapU)
         }
@@ -419,11 +418,9 @@ public enum BoostV5AutoConfigApply {
             let stepCap = abs(current) * redriveMaxStepRatio
             let bounded = min(max(rawProposed, current - stepCap), current + stepCap)
             var proposed = (bounded * 100).rounded() / 100
-            // The committed cap is never auto-raised above the onboarding ceiling. A value above it,
-            // which only the person can have set, is not raised further (AAPS Boost 6.3.3).
-            if knob == .committedCapU, proposed > current + Self.defaultEps {
-                proposed = min(proposed, max(current, BoostV5AutoConfig.committedCapAutoMax))
-            }
+            // The committed cap stays inside its setting's range, as the Kotlin's coerceIn(key.min, key.max)
+            // keeps every knob. Trio's other knobs rely on the decode clamp (REVIEW.md, pre-existing).
+            if knob == .committedCapU { proposed = min(max(proposed, 0), BoostV5AutoConfig.committedCapMaxU) }
             // Aggression is never auto-raised above neutral. A raise stops at 1.0, and from a value
             // already at or above 1.0, which only the user can have set, it does not move. The
             // baseline is not advanced, so the withheld movement stays available.
@@ -563,10 +560,10 @@ public enum BoostV5AutoConfigApply {
         // derivation so the hypo-prone and well-controlled policy is not duplicated here.
         if suggestion.committedCapU > 0 {
             let primer = BoostAutoConfigKnob.primerCapU
-            let frac = suggestion.primerCapU / suggestion.committedCapU
             let currentPrimer = operative[primer]!
-            let raw = operative[.committedCapU]! * frac
-            let newPrimer = (min(max(raw, 0), operative[.committedCapU]!) * 100).rounded() / 100
+            let raw = operative[.committedCapU]! * suggestion.primerFrac
+            let newPrimer = (min(max(raw, 0), min(operative[.committedCapU]!, BoostV5AutoConfig.primerCapMaxU)) * 100)
+                .rounded() / 100
             let primerStored = storedValue(primer)
             let primerAtStart = BoostV5AutoConfig.primerFractions.map { (start[.committedCapU]! * $0 * 100).rounded() / 100 }
             let changes = abs(newPrimer - currentPrimer) > redrivePrimerDeadband

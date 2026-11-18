@@ -542,7 +542,7 @@ private enum BoostSettingInfo {
         "Scales the per-cycle insulin (aggression) budget. 1.0 = default; below 1.0 for sensitive users, above for resistant. Range 0.8–1.2."
     static let confirmedCap = "Hard upper limit on the confirmed meal SMB. Default: 2.5 U"
     static let committedCap =
-        "Hard upper limit on the per-cycle committed meal SMB. Up to 5.0 U; auto-config sets no more than 2.5 U. Default: 0.5 U"
+        "Hard upper limit on the per-cycle committed meal SMB, up to 5.0 U. Auto-config sets it from your history and goes above 2.5 U only when your daily dose is above about 100 U or a quarter or more of your SMBs are above 2.5 U. Default: 0.5 U"
     static let cumulativeCap =
         "Total SMB insulin (U) that may be delivered in any rolling 60-minute window. Caps insulin stacking during sustained climbs. Set to 0 to disable. Factory default: 10 U (non-binding); auto-configuration tightens it to your own history (Confirmed cap + 2× Committed cap)."
     static let fastCarbConfirm =

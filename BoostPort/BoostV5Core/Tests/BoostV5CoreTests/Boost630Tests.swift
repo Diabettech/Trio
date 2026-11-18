@@ -114,7 +114,8 @@ final class Boost630Tests: XCTestCase {
             aggression: aggression, hypoCaution: hypoCaution, confirmedCapU: 2.5, committedCapU: committedCapU,
             cumulativeSmbCap60MinU: BoostV5AutoConfig.cumulativeCap60Min(confirmedCapU: 2.5, committedCapU: committedCapU),
             bolusCapU: 10, fastCarbConfirm: true, aggressiveEarlyConfirm: false,
-            velocityBudgetFloor: false, primerCapU: primerCapU, primerTbrFallback: false, rationale: []
+            velocityBudgetFloor: false, primerCapU: primerCapU,
+            primerFrac: committedCapU > 0 ? primerCapU / committedCapU : 0, primerTbrFallback: false, rationale: []
         )
     }
 

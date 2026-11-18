@@ -50,7 +50,8 @@ final class RedriveTests: XCTestCase {
             ),
             bolusCapU: 10, fastCarbConfirm: true,
             aggressiveEarlyConfirm: false, velocityBudgetFloor: false,
-            primerCapU: primerCapU, primerTbrFallback: false, rationale: []
+            primerCapU: primerCapU, primerFrac: committedCapU > 0 ? primerCapU / committedCapU : 0,
+            primerTbrFallback: false, rationale: []
         )
     }
 
@@ -186,42 +187,68 @@ final class RedriveTests: XCTestCase {
         XCTAssertEqual(store.value[.committedCapU]!, 1.25, accuracy: 1E-9)
     }
 
-    // AAPS Boost 6.3.3 (bb9ea37fc5, RedriveCommittedCapCeilingTest): the setting goes to 5.0 U, and
-    // re-derivation never raises the committed cap above 2.5 U or raises a value set above that.
-    func testReDerivationDoesNotRaiseTheCommittedCapPastTheAutoMaximum() {
-        XCTAssertEqual(BoostV5AutoConfig.committedCapAutoMax, 2.5)
+    // AAPS Boost 6.3.3 (9bb6404df2, RedriveCommittedCapCeilingTest): auto-config uses the committed
+    // cap's whole range, up to 5.0 U, and the primer keeps its own 2.5 U maximum.
+    private func derived(tdd: Double) -> BoostV5AutoConfig.Suggestion {
+        BoostV5AutoConfig.compute(.init(
+            daysWithData: 28, bgReadingCount: 6000, tddMedianU: tdd,
+            manualBolusesU: Array(repeating: 4.0, count: 20), smbAmountsU: Array(repeating: 0.3, count: 200),
+            tbrBelow70Pct: 1.0, timeBelow54Pct: 0.2, meanGlucoseMgdl: 130, currentMaxBolusU: 2.5
+        ))!
+    }
+
+    func testOnboardingDerivesTheCommittedCapUpToTheSettingsMaximum() {
+        XCTAssertEqual(BoostV5AutoConfig.committedCapMaxU, 5.0)
+        XCTAssertEqual(derived(tdd: 80).committedCapU, 2.0)
+        XCTAssertEqual(derived(tdd: 160).committedCapU, 4.0)
+        XCTAssertEqual(derived(tdd: 240).committedCapU, 5.0)
+    }
+
+    func testThePrimerStaysWithinItsOwnMaximumWhenTheCommittedCapIsAboveIt() {
+        let s = derived(tdd: 200) // committed cap 5.0; any fraction above 0.5 would pass 2.5
+        XCTAssertEqual(s.committedCapU, 5.0)
+        XCTAssertEqual(s.primerCapU, BoostV5AutoConfig.primerCapMaxU)
+    }
+
+    func testReDerivationRaisesTheCommittedCapPast2_5AndStopsAt5() {
         let store = Store()
         store.value[.committedCapU] = 2.5
-        store.run(suggestion(committedCapU: 2.0)) // baseline
-        for _ in 0 ..< 3 { store.run(suggestion(committedCapU: 2.5)) } // would propose 3.13
-        XCTAssertLessThanOrEqual(store.value[.committedCapU]!, 2.5 + 1E-9)
+        store.run(derived(tdd: 100)) // baseline: derived 2.5
+        for _ in 0 ..< 3 { store.run(derived(tdd: 160)) } // derived 4.0
+        XCTAssertGreaterThan(store.value[.committedCapU]!, 2.5)
+        for _ in 0 ..< 6 { store.run(derived(tdd: 400)) } // derived 5.0, and movement that would carry it further
+        XCTAssertLessThanOrEqual(store.value[.committedCapU]!, 5.0 + 1E-9)
     }
 
-    func testReDerivationStillRaisesALowerCommittedCapUpToTheAutoMaximum() {
+    func testReDerivationHoldsACommittedCapItWouldCarryPast5To5() {
+        // The Kotlin coerces every knob to its range; Trio clamps the committed cap explicitly.
         let store = Store()
-        store.value[.committedCapU] = 2.2
-        store.run(suggestion(committedCapU: 1.6)) // baseline
-        for _ in 0 ..< 3 { store.run(suggestion(committedCapU: 2.5)) } // 2.2 x 1.5625 = 3.44 uncapped
-        XCTAssertEqual(store.value[.committedCapU]!, 2.5, accuracy: 1E-9)
+        store.value[.committedCapU] = 4.8
+        store.run(derived(tdd: 160)) // baseline: derived 4.0
+        store.run(derived(tdd: 240)) // derived 5.0: 4.8 x 1.25 = 6.0, inside the 25% step
+        XCTAssertEqual(store.value[.committedCapU]!, 5.0, accuracy: 1E-9)
     }
 
-    func testACommittedCapSetAboveTheAutoMaximumIsNotRaisedButCanBeLowered() {
+    func testReDerivationHoldsThePrimerToItsOwnMaximum() {
         let store = Store()
-        store.value[.committedCapU] = 3.0
-        store.run(suggestion(committedCapU: 2.0)) // baseline
-        for _ in 0 ..< 3 { store.run(suggestion(committedCapU: 2.5)) }
-        XCTAssertEqual(store.value[.committedCapU]!, 3.0, accuracy: 1E-9)
-        store.run(suggestion(committedCapU: 1.6)) // the driver fell 36% from its baseline
-        XCTAssertLessThan(store.value[.committedCapU]!, 3.0)
+        store.value[.committedCapU] = 4.0
+        store.value.removeValue(forKey: .primerCapU) // never written, so auto-config owns it
+        store.run(derived(tdd: 160)) // 4.0 x 0.75 = 3.0 before the primer's 2.5 U maximum
+        XCTAssertEqual(store.value[.primerCapU]!, BoostV5AutoConfig.primerCapMaxU, accuracy: 1E-9)
     }
 
-    func testOnboardingNeverSetsTheCommittedCapAboveTheAutoMaximum() {
-        let s = BoostV5AutoConfig.compute(.init(
-            daysWithData: 28, bgReadingCount: 6000, tddMedianU: 300,
-            manualBolusesU: Array(repeating: 4.0, count: 20), smbAmountsU: Array(repeating: 0.3, count: 200),
-            tbrBelow70Pct: 1.0, timeBelow54Pct: 0.2, meanGlucoseMgdl: 130, currentMaxBolusU: 10
-        ))
-        XCTAssertEqual(s?.committedCapU, 2.5)
+    func testThePrimerFollowsARisingCommittedCapAtThePolicyFractionNotTheClampedRatio() {
+        let s = derived(tdd: 200) // committed 5.0, primer held to 2.5: the ratio is no longer the fraction
+        let start = (2.5 * s.primerFrac * 100).rounded() / 100
+        let store = Store()
+        store.value[.committedCapU] = 2.5
+        store.value[.primerCapU] = start
+        store.run(derived(tdd: 100)) // baseline: derived committed cap 2.5
+        store.run(s) // the committed cap rises by the step limit
+        let cap = store.value[.committedCapU]!
+        XCTAssertGreaterThan(cap, 2.5)
+        XCTAssertGreaterThanOrEqual(store.value[.primerCapU]!, start)
+        XCTAssertEqual(store.value[.primerCapU]!, min(cap * s.primerFrac, BoostV5AutoConfig.primerCapMaxU), accuracy: 0.011)
     }
 
     func testThePrimerCeilingFollowsTheCommittedCap() {

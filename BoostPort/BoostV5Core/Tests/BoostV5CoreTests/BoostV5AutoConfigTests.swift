@@ -398,6 +398,19 @@ final class BoostV5AutoConfigTests: XCTestCase {
         XCTAssertEqual(f.store[.confirmedCapU], 1.5)
     }
 
+    // AAPS 9bb6404df2: onboarding sizes Trio's primer from the kept committed cap at the policy
+    // fraction. primerCapU / committedCapU stops being that fraction once the primer is held to 2.5 U.
+    func testOnboardingSizesThePrimerFromAKeptCapAtThePolicyFraction() {
+        let s = BoostV5AutoConfig.compute(prior(tdd: 200, smb: [0.3], tbr70: 1.0, sev54: 0.2))!
+        XCTAssertEqual(s.committedCapU, 5.0)
+        XCTAssertEqual(s.primerCapU, 2.5) // held: 5.0 x 0.75 would be 3.75
+        let f = FakeStore([.committedCapU: 2.5])
+        f.userSetFlags = [.committedCapU] // the person's cap is kept
+        _ = f.apply(s, tbr: 1.0)
+        XCTAssertEqual(f.store[.committedCapU], 2.5)
+        XCTAssertEqual(f.store[.primerCapU]!, (2.5 * s.primerFrac * 100).rounded() / 100, accuracy: 1E-9)
+    }
+
     func testOnceAppliedKnobIsResolvedAndNeverReapplied() {
         let s = BoostV5AutoConfig.compute(prior())!
         let f = FakeStore()
@@ -413,6 +426,7 @@ final class BoostV5AutoConfigTests: XCTestCase {
             aggressiveEarlyConfirm: s.aggressiveEarlyConfirm,
             velocityBudgetFloor: s.velocityBudgetFloor,
             primerCapU: s.primerCapU,
+            primerFrac: s.primerFrac,
             primerTbrFallback: s.primerTbrFallback,
             rationale: s.rationale
         )
