@@ -3,7 +3,7 @@ import Foundation
 /// The AAPS Boost release this port is synced to (AAPS `Versions.boostVersion`). Trio's own
 /// APP_VERSION belongs to the upstream project, so the Boost version is carried separately.
 public enum BoostVersion {
-    public static let synced = "6.3.2"
+    public static let synced = "6.3.3"
 }
 
 public enum BoostMode: String, Codable, CaseIterable, Identifiable, Sendable {

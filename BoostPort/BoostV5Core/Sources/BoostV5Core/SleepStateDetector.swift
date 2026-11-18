@@ -101,6 +101,10 @@ public enum SleepStateConstants {
     /// long BEFORE nightStart, and the gentle HR+steps wake is trusted only within this long of
     /// nightEnd (earlier genuine rising is caught by `wakeStepStrongThreshold`). (Kotlin: `SLEEP_SCHEDULE_TOLERANCE_MIN = 90`)
     public static let sleepScheduleToleranceMin = 90
+    /// Hours without any valid HR after which the person is treated as having no HR feed. A day covers
+    /// a watch that uploads in batches or stops overnight, which still counts as a feed.
+    /// (Kotlin: `HR_FEED_LOOKBACK_HOURS = 24`, AAPS Boost 6.3.3)
+    public static let hrFeedLookbackHours = 24
     /// Steps (in the 15-min bucket, or cumulative growth over `wakeStepLookbackMin`) that must
     /// accompany an HR transmission burst for it to count as a wake before the scheduled-wake grace
     /// window (AAPS 5a1c852a57). Batched watch uploads produce a burst after a drought every 15 to
@@ -249,6 +253,10 @@ public struct SleepDetectorInputs {
     /// ends it. 0 disables the hold. A threshold of 0 falls back to `wakeStepStrongThreshold`.
     public var sleepInStepsThreshold: Int
     public var sleepInWindowMin: Int
+    /// False when the host has seen no valid HR in `hrFeedLookbackHours`. Without a feed the HR rules
+    /// do not apply: sleep can start only from nightStart, on the clock with the step and meal gates
+    /// (AAPS Boost 6.3.3, 153ef9fef4).
+    public var hrFeedPresent: Bool
 
     public init(
         hrReadings: [SleepHrReading],
@@ -268,7 +276,8 @@ public struct SleepDetectorInputs {
         autoBySleep: Bool,
         stepsToday: Int = -1,
         sleepInStepsThreshold: Int = 0,
-        sleepInWindowMin: Int = 0
+        sleepInWindowMin: Int = 0,
+        hrFeedPresent: Bool = true
     ) {
         self.hrReadings = hrReadings
         self.hrWindowMinutes = hrWindowMinutes
@@ -288,6 +297,7 @@ public struct SleepDetectorInputs {
         self.stepsToday = stepsToday
         self.sleepInStepsThreshold = sleepInStepsThreshold
         self.sleepInWindowMin = sleepInWindowMin
+        self.hrFeedPresent = hrFeedPresent
     }
 }
 
@@ -310,7 +320,12 @@ public enum SleepStateDetector {
         // (before nightStart) through nightEnd — an unusually-early onset up to 90 min pre-nightStart
         // is detected promptly regardless of the (SMB-pre-warm) preSleepLead. And the gentle HR+steps
         // wake is trusted only within sleepScheduleToleranceMin of nightEnd.
-        let sleepCandStart = (inputs.nightStartMinute - C.sleepScheduleToleranceMin + C.minutesPerDay) % C.minutesPerDay
+        // The early start exists because HR can corroborate an early onset. Without an HR feed nothing
+        // separates an evening on the sofa from sleep, so candidacy, and with it the hold, waits for
+        // nightStart (AAPS Boost 6.3.3).
+        let sleepCandStart = inputs.hrFeedPresent
+            ? (inputs.nightStartMinute - C.sleepScheduleToleranceMin + C.minutesPerDay) % C.minutesPerDay
+            : inputs.nightStartMinute
         let inSleepCandidateWindow = minuteInWrappedRange(inputs.nowMinuteOfDay, sleepCandStart, inputs.nightEndMinute)
         let wakeGraceStart = (inputs.nightEndMinute - C.sleepScheduleToleranceMin + C.minutesPerDay) % C.minutesPerDay
         let nearScheduledWake = minuteInWrappedRange(inputs.nowMinuteOfDay, wakeGraceStart, inputs.nightEndMinute)
@@ -453,7 +468,9 @@ public enum SleepStateDetector {
                     stepSamples: newState.stepSamples, hrHighStreak: newState.hrHighStreak
                 )
                 transitioned = true
-            } else if anyQualifies {
+                // PRE_SLEEP starts preSleepLeadMin before nightStart and does not check the candidacy
+                // window; without an HR feed it must, or the clock qualifier starts sleep in the lead.
+            } else if anyQualifies, inputs.hrFeedPresent || inSleepCandidateWindow {
                 if newState.sleepCandidateSinceMs == nil {
                     newState.sleepCandidateSinceMs = inputs.nowMs
                 } else {

@@ -189,5 +189,7 @@ checklist in the global instructions and items 23 to 27 below.
 | A hidden Boost max IOB at its 1 U default held every daytime Boost SMB to 0 U from 1 U on board until onboarding copied max IOB into it | `BoostV1DeterminationTests`: the default follows max IOB up to 12 U, a set value is a limit in V6 and in V1's tiers, and a pre-change file migrates to 12 once |
 | Auto-config read the newest 6,000 or 12,000 glucose readings, so a one-minute CGM showed about 4 days and onboarding never ran | Nothing yet; the reads have no count limit |
 | Time-below-range is counted per reading, so a window spanning a 5-minute to 1-minute CGM change weights the 1-minute days five times | Pre-existing; nothing yet |
+| Without an HR feed the sleep detector qualified on the clock 90 min before night start and held it, so the evening meal ran as SLEEPING (found on an AAPS user, AAPS `153ef9fef4`; the same code was in Trio) | `SleepNoHrFeedTests`; each test fails against a mutant removing its part |
+| Re-derivation in Trio does not clamp a knob to its setting's range, as the Kotlin does; the decode clamp on the next read is what holds it | Pre-existing; the committed cap has its own ceiling (`RedriveTests`), the other caps nothing yet |
 
 A new incident adds a row here naming its check, or "nothing yet".

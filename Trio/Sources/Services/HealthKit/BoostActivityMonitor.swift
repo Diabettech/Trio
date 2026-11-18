@@ -31,6 +31,10 @@ final class BaseBoostActivityMonitor: BoostActivityMonitor, Injectable {
     // only guards the brief chain swap, never an `await`.
     private let refreshLock = NSLock()
     private var refreshChain: Task<Void, Never>?
+    // Whether any valid HR arrived in the last day (AAPS Boost 6.3.3). Touched only inside the
+    // serialized performRefresh; the day's query runs at most every 30 min.
+    private var hrFeedCheckedAt: Date = .distantPast
+    private var hrFeedPresentCached = true
 
     private var stepType: HKQuantityType? { HKObjectType.quantityType(forIdentifier: .stepCount) }
     private var hrType: HKQuantityType? { HKObjectType.quantityType(forIdentifier: .heartRate) }
@@ -165,7 +169,12 @@ final class BaseBoostActivityMonitor: BoostActivityMonitor, Injectable {
         // hard sleep/wake bounds to the configured times and cap how far learning can move them —
         // preventing the self-reinforcing earlier-every-night collapse. No/insufficient data →
         // effective == configured.
-        let effectiveNightStart = Self.clampToConfiguredBand(agg.sleepStartMinAvg, configNightStart)
+        // Without an HR feed the learned start may move later but not earlier: those sessions began on
+        // the clock fallback, about 80 min before the configured start (AAPS Boost 6.3.3).
+        let hrFeed = await hrFeedPresent(now: now, recent: hrReadings)
+        let effectiveNightStart = SleepHistoryTracker.effectiveNightStartMin(
+            learned: agg.sleepStartMinAvg, configured: configNightStart, hrFeedPresent: hrFeed
+        )
         // Wake side is one-sided: learning may push the night end later than configured, never
         // earlier, so protection is never lifted before the configured wake. See the clamp's note.
         let effectiveNightEnd = Self.clampToConfiguredBand(agg.wakeMinAvg, configNightEnd, allowEarlier: false)
@@ -200,7 +209,8 @@ final class BaseBoostActivityMonitor: BoostActivityMonitor, Injectable {
                 stepsToday: stepsTodayCumulative,
                 // The lie-in hold, as AAPS passes it since Boost 6.3.2.
                 sleepInStepsThreshold: Int(d(prefs.boostSleepInSteps)),
-                sleepInWindowMin: Int(d(prefs.boostSleepInHours) * 60)
+                sleepInWindowMin: Int(d(prefs.boostSleepInHours) * 60),
+                hrFeedPresent: hrFeed
             ),
             prev?.sleepState ?? SleepDetectorState(state: .awake, enteredAtMs: nowMs)
         )
@@ -400,6 +410,40 @@ final class BaseBoostActivityMonitor: BoostActivityMonitor, Injectable {
                 options: .cumulativeSum
             ) { _, stats, _ in
                 continuation.resume(returning: stats?.sumQuantity()?.doubleValue(for: .count()) ?? 0)
+            }
+            healthKitStore.execute(query)
+        }
+    }
+
+    /// Any valid HR in the last `SleepStateConstants.hrFeedLookbackHours`. A failed query, which is
+    /// what HealthKit returns while the phone is locked, keeps the cached answer.
+    private func hrFeedPresent(now: Date, recent: [SleepHrReading]) async -> Bool {
+        if recent.contains(where: \.isValid) {
+            hrFeedPresentCached = true
+            hrFeedCheckedAt = now
+        } else if now.timeIntervalSince(hrFeedCheckedAt) >= 30 * 60,
+                  let any = await anyHrSample(
+                      since: now.addingTimeInterval(-Double(SleepStateConstants.hrFeedLookbackHours) * 3600),
+                      now: now
+                  )
+        {
+            hrFeedPresentCached = any
+            hrFeedCheckedAt = now
+        }
+        return hrFeedPresentCached
+    }
+
+    /// Whether HealthKit holds at least one HR sample in [since, now]; nil when the query failed.
+    private func anyHrSample(since: Date, now: Date) async -> Bool? {
+        guard let hrType else { return false }
+        return await withCheckedContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: hrType,
+                predicate: HKQuery.predicateForSamples(withStart: since, end: now),
+                limit: 1,
+                sortDescriptors: nil
+            ) { _, samples, error in
+                continuation.resume(returning: error == nil ? !(samples ?? []).isEmpty : nil)
             }
             healthKitStore.execute(query)
         }

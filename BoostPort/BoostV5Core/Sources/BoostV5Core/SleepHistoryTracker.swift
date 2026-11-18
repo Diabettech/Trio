@@ -129,6 +129,18 @@ public enum SleepHistoryTracker {
         return ((configured + clamped) % 1440 + 1440) % 1440
     }
 
+    /// Night start for the detector. Without an HR feed the learned start may not move it earlier:
+    /// those sessions began on the clock fallback, not on observed sleep, so an early learned start
+    /// would reopen sleep during the evening (AAPS Boost 6.3.3 `effectiveNightStartMin`).
+    public static func effectiveNightStartMin(
+        learned: Int?,
+        configured: Int,
+        bandMin: Int = learnedWindowBandMin,
+        hrFeedPresent: Bool
+    ) -> Int {
+        clampToConfiguredBand(learned: learned, configured: configured, bandMin: bandMin, allowEarlier: hrFeedPresent)
+    }
+
     public static func aggregate(_ h: History, localOffsetMs: Double) -> Aggregate {
         aggregate(h, offsetAt: { _ in localOffsetMs })
     }
