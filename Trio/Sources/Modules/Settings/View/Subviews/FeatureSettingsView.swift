@@ -150,7 +150,7 @@ private struct BoostAdvancedSettingsView: View {
                 )
                 BoostSliderRow(
                     title: "Committed cap (U)", info: BoostSettingInfo.committedCap,
-                    value: $state.boostV5CommittedCapU, range: 0 ... 2.5, step: 0.05,
+                    value: $state.boostV5CommittedCapU, range: 0 ... 5.0, step: 0.05,
                     onUserEdit: state.markBoostV5CommittedCapUserSet
                 )
                 BoostSliderRow(
@@ -541,7 +541,8 @@ private enum BoostSettingInfo {
     static let sensitivity =
         "Scales the per-cycle insulin (aggression) budget. 1.0 = default; below 1.0 for sensitive users, above for resistant. Range 0.8–1.2."
     static let confirmedCap = "Hard upper limit on the confirmed meal SMB. Default: 2.5 U"
-    static let committedCap = "Hard upper limit on the per-cycle committed meal SMB. Default: 0.5 U"
+    static let committedCap =
+        "Hard upper limit on the per-cycle committed meal SMB. Up to 5.0 U; auto-config sets no more than 2.5 U. Default: 0.5 U"
     static let cumulativeCap =
         "Total SMB insulin (U) that may be delivered in any rolling 60-minute window. Caps insulin stacking during sustained climbs. Set to 0 to disable. Factory default: 10 U (non-binding); auto-configuration tightens it to your own history (Confirmed cap + 2× Committed cap)."
     static let fastCarbConfirm =

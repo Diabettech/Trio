@@ -419,6 +419,11 @@ public enum BoostV5AutoConfigApply {
             let stepCap = abs(current) * redriveMaxStepRatio
             let bounded = min(max(rawProposed, current - stepCap), current + stepCap)
             var proposed = (bounded * 100).rounded() / 100
+            // The committed cap is never auto-raised above the onboarding ceiling. A value above it,
+            // which only the person can have set, is not raised further (AAPS Boost 6.3.3).
+            if knob == .committedCapU, proposed > current + Self.defaultEps {
+                proposed = min(proposed, max(current, BoostV5AutoConfig.committedCapAutoMax))
+            }
             // Aggression is never auto-raised above neutral. A raise stops at 1.0, and from a value
             // already at or above 1.0, which only the user can have set, it does not move. The
             // baseline is not advanced, so the withheld movement stays available.

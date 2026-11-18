@@ -186,6 +186,44 @@ final class RedriveTests: XCTestCase {
         XCTAssertEqual(store.value[.committedCapU]!, 1.25, accuracy: 1E-9)
     }
 
+    // AAPS Boost 6.3.3 (bb9ea37fc5, RedriveCommittedCapCeilingTest): the setting goes to 5.0 U, and
+    // re-derivation never raises the committed cap above 2.5 U or raises a value set above that.
+    func testReDerivationDoesNotRaiseTheCommittedCapPastTheAutoMaximum() {
+        XCTAssertEqual(BoostV5AutoConfig.committedCapAutoMax, 2.5)
+        let store = Store()
+        store.value[.committedCapU] = 2.5
+        store.run(suggestion(committedCapU: 2.0)) // baseline
+        for _ in 0 ..< 3 { store.run(suggestion(committedCapU: 2.5)) } // would propose 3.13
+        XCTAssertLessThanOrEqual(store.value[.committedCapU]!, 2.5 + 1E-9)
+    }
+
+    func testReDerivationStillRaisesALowerCommittedCapUpToTheAutoMaximum() {
+        let store = Store()
+        store.value[.committedCapU] = 2.2
+        store.run(suggestion(committedCapU: 1.6)) // baseline
+        for _ in 0 ..< 3 { store.run(suggestion(committedCapU: 2.5)) } // 2.2 x 1.5625 = 3.44 uncapped
+        XCTAssertEqual(store.value[.committedCapU]!, 2.5, accuracy: 1E-9)
+    }
+
+    func testACommittedCapSetAboveTheAutoMaximumIsNotRaisedButCanBeLowered() {
+        let store = Store()
+        store.value[.committedCapU] = 3.0
+        store.run(suggestion(committedCapU: 2.0)) // baseline
+        for _ in 0 ..< 3 { store.run(suggestion(committedCapU: 2.5)) }
+        XCTAssertEqual(store.value[.committedCapU]!, 3.0, accuracy: 1E-9)
+        store.run(suggestion(committedCapU: 1.6)) // the driver fell 36% from its baseline
+        XCTAssertLessThan(store.value[.committedCapU]!, 3.0)
+    }
+
+    func testOnboardingNeverSetsTheCommittedCapAboveTheAutoMaximum() {
+        let s = BoostV5AutoConfig.compute(.init(
+            daysWithData: 28, bgReadingCount: 6000, tddMedianU: 300,
+            manualBolusesU: Array(repeating: 4.0, count: 20), smbAmountsU: Array(repeating: 0.3, count: 200),
+            tbrBelow70Pct: 1.0, timeBelow54Pct: 0.2, meanGlucoseMgdl: 130, currentMaxBolusU: 10
+        ))
+        XCTAssertEqual(s?.committedCapU, 2.5)
+    }
+
     func testThePrimerCeilingFollowsTheCommittedCap() {
         let store = Store()
         store.value[.committedCapU] = 1.0

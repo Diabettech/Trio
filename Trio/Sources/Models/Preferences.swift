@@ -90,7 +90,7 @@ struct Preferences: JSON, Equatable {
     var boostV5HypoCaution: Decimal = 1.0 // 1.0…2.0 — deepens ML hypo damping
     var boostV5Sensitivity: Decimal = 1.0 // 0.8…1.2 — budget lever
     var boostV5ConfirmedCapU: Decimal = 2.5 // 0…7.5 U
-    var boostV5CommittedCapU: Decimal = 0.5 // 0…2.5 U
+    var boostV5CommittedCapU: Decimal = 0.5 // 0…5.0 U
     // Rolling-60-min cumulative SMB cap (anti-stacking / dose-frequency safeguard, matches AAPS).
     // 0 disables. Default permissive (10 = max) on purpose: auto-config LOWERS it per user; a
     // conservative default would needlessly throttle before personalisation.
@@ -608,7 +608,7 @@ extension Preferences: Decodable {
         }
 
         if let v = try? container.decode(Decimal.self, forKey: .boostV5CommittedCapU) {
-            preferences.boostV5CommittedCapU = max(0, min(2.5, v))
+            preferences.boostV5CommittedCapU = max(0, min(5.0, v))
         }
 
         if let v = try? container.decode(Decimal.self, forKey: .boostCumulativeSmbCap60Min) {
