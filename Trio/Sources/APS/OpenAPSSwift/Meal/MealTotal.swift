@@ -103,7 +103,6 @@ enum MealTotal {
     ) throws -> ComputedCarbs? {
         // Re-assign to a var, so it can be sorted
         var _treatments = treatments
-        var profile = profile
 
         // Define defaults
         var carbs = Decimal(0)
@@ -122,6 +121,9 @@ enum MealTotal {
         _treatments.sort(by: {
             $0.timestamp > $1.timestamp
         })
+
+        // pure per-event mapping, hoisted out of the per-carb-entry loop
+        let computedHistory = pumpHistory.map { $0.computedEvent() }
 
         var carbsToRemove = Decimal(0)
 
@@ -144,7 +146,7 @@ enum MealTotal {
                     let myCarbsAbsorbed = try MealCob.detectCarbAbsorption(
                         clock: &cobInputs.iobInputs.clock,
                         glucose: cobInputs.glucoseData,
-                        pumpHistory: cobInputs.iobInputs.history,
+                        computedHistory: computedHistory,
                         basalProfile: cobInputs.basalProfile,
                         profile: &cobInputs.iobInputs.profile,
                         mealDate: cobInputs.mealDate,
@@ -178,7 +180,7 @@ enum MealTotal {
         let finalCobResult = try MealCob.detectCarbAbsorption(
             clock: &cobInputs.iobInputs.clock,
             glucose: cobInputs.glucoseData,
-            pumpHistory: cobInputs.iobInputs.history,
+            computedHistory: computedHistory,
             basalProfile: cobInputs.basalProfile,
             profile: &cobInputs.iobInputs.profile,
             mealDate: cobInputs.mealDate,

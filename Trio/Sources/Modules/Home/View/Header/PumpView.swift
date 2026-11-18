@@ -13,12 +13,6 @@ struct PumpView: View {
 
     let NORMAL_PATCH_AGE = TimeInterval.hours(80)
 
-    private var batteryFormatter: NumberFormatter {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .percent
-        return formatter
-    }
-
     private var hourglassIcon: String {
         if activatedAtDate != nil { return "hourglass.badge.plus" }
         guard let expiration = expiresAtDate else { return "hourglass" }
@@ -56,6 +50,9 @@ struct PumpView: View {
                             Text("Add pump")
                                 .font(.caption)
                                 .bold()
+                                .multilineTextAlignment(.center)
+                                .frame(maxWidth: 100)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                     .frame(alignment: .top)
@@ -87,6 +84,9 @@ struct PumpView: View {
                         Capsule()
                             .stroke(reservoirColor.opacity(0.4), lineWidth: 2)
                     )
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Text("Reservoir"))
+                    .accessibilityValue(Text(reservoirAccessibilityValue))
                 }
 
                 if (battery.first?.display) != nil, let shouldBatteryDisplay = battery.first?.display, shouldBatteryDisplay {
@@ -94,9 +94,12 @@ struct PumpView: View {
                         Image(systemName: "battery.100")
                             .font(.callout)
                             .foregroundStyle(batteryColor)
-                        Text("\(Formatter.integerFormatter.string(for: battery.first?.percent ?? 100) ?? "100") %")
+                        Text(((battery.first?.percent ?? 100) / 100).formatted(.wholePercent))
                             .font(.callout).fontWeight(.bold).fontDesign(.rounded)
                     }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Text("Pump battery"))
+                    .accessibilityValue(Text(batteryAccessibilityValue))
                 }
 
                 if let date = expiresAtDate {
@@ -122,43 +125,61 @@ struct PumpView: View {
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
                 .frame(
-                    // If the string is > 6 chars, i.e., exceeds "xd yh", limit width to 80 pts
-                    // This forces the "Replace pod" string to wrap to 2 lines.
-                    maxWidth: remainingTimeString.count > 6 ? 80 : .infinity,
+                    // Narrow frame so "Replace pod" wraps to 2 lines.
+                    maxWidth: date.timeIntervalSince(timerDate) > 0 ? .infinity : 80,
                     alignment: .leading
                 )
         }
         // aligns the stopwatch icon exactly with the first pixel of the reservoir icon
         .padding(.leading, date.timeIntervalSince(timerDate) > 0 || activatedAtDate != nil ? 12 : 0)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("Pod expiration"))
+        .accessibilityValue(Text(remainingTimeStringAccessible(time: date.timeIntervalSince(timerDate))))
     }
 
     private func remainingTimeString(time: TimeInterval) -> String {
         guard time > 0 else {
             return String(localized: "Replace pod", comment: "View/Header when pod expired")
         }
+        return Duration.seconds(time).formattedTimeSpan(.largestTwoUnits)
+    }
 
-        var time = time
-        let days = Int(time / 1.days.timeInterval)
-        time -= days.days.timeInterval
-        let hours = Int(time / 1.hours.timeInterval)
-        time -= hours.hours.timeInterval
-        let minutes = Int(time / 1.minutes.timeInterval)
-
-        if days >= 1 {
-            return "\(days)" + String(localized: "d", comment: "abbreviation for days") + " \(hours)" +
-                String(localized: "h", comment: "abbreviation for hours")
+    /// Spoken remaining pod time, so VoiceOver doesn't read the compact "m" as "meters".
+    private func remainingTimeStringAccessible(time: TimeInterval) -> String {
+        guard time > 0 else {
+            return String(localized: "Replace pod", comment: "View/Header when pod expired")
         }
+        return Duration.seconds(time).formattedSpokenTimeSpan(.largestTwoUnits)
+    }
 
-        if hours >= 1 {
-            var remainingHoursString = "\(hours)" + String(localized: "h", comment: "abbreviation for hours")
-            if hours < 12 {
-                remainingHoursString += " " + "\(minutes)" +
-                    String(localized: "m", comment: "abbreviation for minutes")
-            }
-            return remainingHoursString
+    /// Reservoir amount plus a spoken severity word, so the color-coded low state is not lost.
+    private var reservoirAccessibilityValue: String {
+        guard let reservoir = reservoir else { return "" }
+        let amount = reservoir == 0xDEAD_BEEF
+            ? "50+ " + String(localized: "U", comment: "Insulin unit")
+            : (Formatter.integerFormatter.string(from: reservoir as NSNumber) ?? "0")
+            + " " + String(localized: "U", comment: "Insulin unit")
+        switch reservoir {
+        case ...10:
+            return amount + ", " + String(localized: "low", comment: "Accessibility: reservoir severity")
+        case ...30:
+            return amount + ", " + String(localized: "getting low", comment: "Accessibility: reservoir severity")
+        default:
+            return amount
         }
+    }
 
-        return "\(minutes)" + String(localized: "m", comment: "abbreviation for minutes")
+    /// Battery percentage plus a spoken severity word mirroring `batteryColor`.
+    private var batteryAccessibilityValue: String {
+        let value = ((battery.first?.percent ?? 100) / 100).formatted(.wholePercent)
+        switch battery.first?.percent {
+        case .some(...10):
+            return value + ", " + String(localized: "low", comment: "Accessibility: battery severity")
+        case .some(...20):
+            return value + ", " + String(localized: "getting low", comment: "Accessibility: battery severity")
+        default:
+            return value
+        }
     }
 
     private var batteryColor: Color {

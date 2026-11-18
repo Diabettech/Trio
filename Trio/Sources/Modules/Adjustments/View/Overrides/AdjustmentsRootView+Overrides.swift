@@ -15,7 +15,9 @@ extension Adjustments.RootView {
 
     var overridePresets: some View {
         Section {
-            ForEach(state.overridePresets) { preset in
+            // objectID instead of the optional `id` field, which can be nil/duplicated and
+            // crashes SwiftUI's ForEach.
+            ForEach(state.overridePresets, id: \.objectID) { preset in
                 overridesView(for: preset, showCheckMark: showOverrideCheckmark) {
                     requestOverridePresetActivation(preset)
                 }
@@ -39,34 +41,33 @@ extension Adjustments.RootView {
     }
 
     func overrideDeleteConfirmation(_ content: some View) -> some View {
-        content.confirmationDialog(
-            "Delete the Override Preset \"\(overrideToDelete?.name ?? "")\"?",
+        let target = overrideToDelete
+        let isRunning = target != nil && state.currentActiveOverride == target
+
+        return content.glassActionSheet(
+            "Delete the Override Preset \"\(target?.name ?? "")\"?",
+            message: isRunning ? Text("This override preset is currently running. Deleting will stop it.") : nil,
             isPresented: Binding(
                 get: { overrideToDelete != nil },
                 set: { if !$0 { overrideToDelete = nil } }
             ),
-            titleVisibility: .visible,
-            presenting: overrideToDelete
-        ) { target in
-            Button(
-                state.currentActiveOverride == target ? "Stop and Delete" : "Delete",
-                role: .destructive
-            ) {
-                if state.currentActiveOverride == target {
+            actions: [
+                GlassSheetAction(
+                    isRunning ? "Stop and Delete" : "Delete",
+                    role: .destructive
+                ) {
+                    guard let target else { return }
+                    if isRunning {
+                        Task {
+                            await state.disableAllActiveOverrides(createOverrideRunEntry: true)
+                        }
+                    }
                     Task {
-                        await state.disableAllActiveOverrides(createOverrideRunEntry: true)
+                        await state.invokeOverridePresetDeletion(target.objectID)
                     }
                 }
-                Task {
-                    await state.invokeOverridePresetDeletion(target.objectID)
-                }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: { target in
-            if state.currentActiveOverride == target {
-                Text("This override preset is currently running. Deleting will stop it.")
-            }
-        }
+            ]
+        )
     }
 
     private func requestOverridePresetActivation(_ preset: OverrideStored) {
@@ -109,11 +110,12 @@ extension Adjustments.RootView {
     var stickyStopOverrideButton: some View {
         ZStack {
             Rectangle()
-                .frame(width: UIScreen.main.bounds.width, height: 65)
+                .frame(height: 65)
                 .foregroundStyle(colorScheme == .dark ? Color.bgDarkerDarkBlue : Color.white)
                 .background(.thinMaterial)
                 .opacity(0.8)
                 .clipShape(Rectangle())
+                .ignoresSafeArea(edges: .horizontal)
 
             Button(action: {
                 showCancelOverrideConfirmDialog = true
@@ -122,7 +124,8 @@ extension Adjustments.RootView {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .padding(10)
             })
-                .frame(width: UIScreen.main.bounds.width * 0.9, height: 40, alignment: .center)
+                .containerRelativeFrame(.horizontal) { width, _ in width * 0.9 }
+                .frame(height: 40)
                 .disabled(!state.isOverrideEnabled)
                 .background(!state.isOverrideEnabled ? Color(.systemGray4) : Color(.systemRed))
                 .tint(.white)
@@ -147,12 +150,16 @@ extension Adjustments.RootView {
 
         let target: String = {
             guard let targetValue = preset.target, targetValue != 0 else { return "" }
-            return state.units == .mgdL ? targetValue.description : targetValue.decimalValue.formattedAsMmolL
+            return targetValue.decimalValue.formatted(for: state.units)
         }()
 
         let targetString = target.isEmpty ? "" : "\(target) \(state.units.rawValue)"
 
-        let durationString = indefinite ? "" : "\(state.formatHoursAndMinutes(Int(duration)))"
+        let durationLabel: (text: String, spoken: String) = {
+            guard !indefinite else { return ("", "") }
+            let span = Duration(minutes: duration)
+            return (span.formattedTimeSpan(), span.formattedSpokenTimeSpan())
+        }()
 
         let scheduledSMBString: String = {
             guard preset.smbIsScheduledOff, preset.start != preset.end else { return "" }
@@ -161,19 +168,21 @@ extension Adjustments.RootView {
 
         let smbString: String = {
             guard preset.smbIsOff || preset.smbIsScheduledOff else { return "" }
-            return "SMBs Off\(scheduledSMBString)"
+            return String(localized: "SMBs Off\(scheduledSMBString)")
         }()
 
-        let maxSmbMinsString: String = {
+        let maxSmbMins: (text: String, spoken: String) = {
             guard smbMinutes != 0, preset.advancedSettings, !preset.smbIsOff,
-                  smbMinutes != state.defaultSmbMinutes else { return "" }
-            return "\(smbMinutes.formatted()) min SMB"
+                  smbMinutes != state.defaultSmbMinutes else { return ("", "") }
+            let span = Duration(minutes: smbMinutes)
+            return ("SMB\u{00A0}" + span.formattedTimeSpan(.minutes), "SMB\u{00A0}" + span.formattedSpokenTimeSpan(.minutes))
         }()
 
-        let maxUamMinsString: String = {
+        let maxUamMins: (text: String, spoken: String) = {
             guard uamMinutes != 0, preset.advancedSettings, !preset.smbIsOff,
-                  uamMinutes != state.defaultUamMinutes else { return "" }
-            return "\(uamMinutes.formatted()) min UAM"
+                  uamMinutes != state.defaultUamMinutes else { return ("", "") }
+            let span = Duration(minutes: uamMinutes)
+            return ("UAM\u{00A0}" + span.formattedTimeSpan(.minutes), "UAM\u{00A0}" + span.formattedSpokenTimeSpan(.minutes))
         }()
 
         let isfAndCrString: String = {
@@ -190,17 +199,13 @@ extension Adjustments.RootView {
             }
         }()
 
-        let percentageString = percentage != 100 ? "\(Int(percentage))%\(isfAndCrString)" : ""
+        let percentageString = percentage == 100 ? "" : (percentage / 100).formatted(.wholePercent) + isfAndCrString
 
-        // Combine all labels into a single array, filtering out empty strings
-        let labels: [String] = [
-            durationString,
-            percentageString,
-            targetString,
-            smbString,
-            maxSmbMinsString,
-            maxUamMinsString
-        ].filter { !$0.isEmpty }
+        let otherLabels = [percentageString, targetString, smbString]
+        let labels = ([durationLabel.text] + otherLabels + [maxSmbMins.text, maxUamMins.text])
+            .filter { !$0.isEmpty }
+        let spokenLabels = ([durationLabel.spoken] + otherLabels + [maxSmbMins.spoken, maxUamMins.spoken])
+            .filter { !$0.isEmpty }
 
         if !name.isEmpty {
             ZStack(alignment: .trailing) {
@@ -240,6 +245,12 @@ extension Adjustments.RootView {
                         .foregroundStyle(.secondary)
                 }
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text(name))
+            .accessibilityValue(Text(spokenLabels.joined(separator: ", ")))
+            .accessibilityHint(Text(String(localized: "Double tap to enable this override", comment: "Accessibility hint")))
+            .accessibilityAddTraits(showOverrideCheckmark && isSelected ? [.isButton, .isSelected] : .isButton)
+            .accessibilityAction { onTap?() }
         }
     }
 }

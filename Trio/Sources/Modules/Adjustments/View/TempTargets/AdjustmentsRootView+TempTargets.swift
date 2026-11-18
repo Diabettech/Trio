@@ -87,47 +87,44 @@ extension Adjustments.RootView {
     }
 
     func tempTargetDeleteConfirmation(_ content: some View) -> some View {
-        content.confirmationDialog(
-            String(
-                localized: "Delete the Temp Target Preset \"\(tempTargetToDelete?.name ?? "")\"?",
-                comment: "Delete confirmation title for temporary target presets"
-            ),
+        let target = tempTargetToDelete
+        let isRunning = target != nil && state.currentActiveTempTarget == target
+
+        return content.glassActionSheet(
+            "Delete the Temp Target Preset \"\(target?.name ?? "")\"?",
+            message: isRunning ? Text("This Temp Target preset is currently running. Deleting will stop it.") : nil,
             isPresented: Binding(
                 get: { tempTargetToDelete != nil },
                 set: { if !$0 { tempTargetToDelete = nil } }
             ),
-            titleVisibility: .visible,
-            presenting: tempTargetToDelete
-        ) { target in
-            Button(
-                state.currentActiveTempTarget == target ? "Stop and Delete" : "Delete",
-                role: .destructive
-            ) {
-                if state.currentActiveTempTarget == target {
+            actions: [
+                GlassSheetAction(
+                    isRunning ? "Stop and Delete" : "Delete",
+                    role: .destructive
+                ) {
+                    guard let target else { return }
+                    if isRunning {
+                        Task {
+                            await state.disableAllActiveTempTargets(createTempTargetRunEntry: true)
+                        }
+                    }
                     Task {
-                        await state.disableAllActiveTempTargets(createTempTargetRunEntry: true)
+                        await state.invokeTempTargetPresetDeletion(target.objectID)
                     }
                 }
-                Task {
-                    await state.invokeTempTargetPresetDeletion(target.objectID)
-                }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: { target in
-            if state.currentActiveTempTarget == target {
-                Text("This Temp Target preset is currently running. Deleting will stop it.")
-            }
-        }
+            ]
+        )
     }
 
     var stickyStopTempTargetButton: some View {
         ZStack {
             Rectangle()
-                .frame(width: UIScreen.main.bounds.width, height: 65)
+                .frame(height: 65)
                 .foregroundStyle(colorScheme == .dark ? Color.bgDarkerDarkBlue : Color.white)
                 .background(.thinMaterial)
                 .opacity(0.8)
                 .clipShape(Rectangle())
+                .ignoresSafeArea(edges: .horizontal)
 
             Button(action: {
                 showCancelTempTargetConfirmDialog = true
@@ -136,7 +133,8 @@ extension Adjustments.RootView {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .padding(10)
             })
-                .frame(width: UIScreen.main.bounds.width * 0.9, height: 40, alignment: .center)
+                .containerRelativeFrame(.horizontal) { width, _ in width * 0.9 }
+                .frame(height: 40)
                 .disabled(!state.isTempTargetEnabled)
                 .background(!state.isTempTargetEnabled ? Color(.systemGray4) : Color(.systemRed))
                 .tint(.white)
@@ -157,41 +155,37 @@ extension Adjustments.RootView {
             tempTarget.halfBasalTarget as? Double
                 .RawValue ?? Double(state.settingHalfBasalTarget)
         )
-        let percentage = Int(
-            TempTargetCalculations.computeAdjustedPercentage(
-                halfBasalTarget: tempTargetHalfBasal,
-                target: tempTargetValue,
-                autosensMax: state.autosensMax
-            )
-        )
+        let percentageText = (TempTargetCalculations.computeAdjustedPercentage(
+            halfBasalTarget: tempTargetHalfBasal,
+            target: tempTargetValue,
+            autosensMax: state.autosensMax
+        ) / 100).formatted(.wholePercent)
         let remainingTime = tempTarget.date?.timeIntervalSinceNow ?? 0
+        let duration = Duration(minutes: (tempTarget.duration ?? 0) as Decimal)
 
-        return ZStack(alignment: .trailing) {
+        let row = ZStack(alignment: .trailing) {
             HStack {
                 VStack(alignment: .leading) {
                     HStack {
                         Text(tempTarget.name ?? "")
                         Spacer()
                         if remainingTime > 0 {
-                            Text("Starts in \(formattedTimeRemaining(remainingTime))")
+                            Text("Starts in \(Duration.seconds(remainingTime).formattedTimeSpan(.largestTwoUnits))")
                                 .foregroundColor(colorScheme == .dark ? .orange : .accentColor)
                         }
                     }
                     HStack(spacing: 2) {
-                        Text(formattedGlucose(glucose: target as Decimal))
+                        Text((target as Decimal).formatted(withUnits: state.units))
                             .foregroundColor(.secondary)
                             .font(.caption)
                         Text("for")
                             .foregroundColor(.secondary)
                             .font(.caption)
-                        Text("\(Formatter.integerFormatter.string(from: (tempTarget.duration ?? 0) as NSNumber)!)")
-                            .foregroundColor(.secondary)
-                            .font(.caption)
-                        Text("min")
+                        Text(duration.formattedTimeSpan())
                             .foregroundColor(.secondary)
                             .font(.caption)
                         if state.isAdjustSensEnabled(usingTarget: tempTargetValue) {
-                            Text(", \(percentage)%")
+                            Text(", " + percentageText)
                                 .foregroundColor(.secondary)
                                 .font(.caption)
                         }
@@ -213,6 +207,27 @@ extension Adjustments.RootView {
                 Image(systemName: "line.3.horizontal")
                     .imageScale(.medium)
                     .foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(tempTarget.name ?? ""))
+        .accessibilityValue(Text(
+            (target as Decimal).formatted(withUnits: state.units) + " "
+                + String(localized: "for", comment: "duration connector") + " "
+                + duration.formattedSpokenTimeSpan()
+                + (state.isAdjustSensEnabled(usingTarget: tempTargetValue) ? ", " + percentageText : "")
+        ))
+        // Only tappable rows (presets) are buttons; scheduled rows are read-only, so they get
+        // neither the button trait, an activation, nor a hint.
+        return Group {
+            if let onTap {
+                row
+                    .accessibilityHint(Text(String(localized: "Enables this temp target", comment: "Accessibility hint")))
+                    .accessibilityAddTraits(showCheckmark && isSelected ? [.isButton, .isSelected] : .isButton)
+                    .accessibilityAction { onTap() }
+            } else {
+                row
+                    .accessibilityAddTraits(showCheckmark && isSelected ? .isSelected : [])
             }
         }
     }

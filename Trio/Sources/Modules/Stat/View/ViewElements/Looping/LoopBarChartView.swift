@@ -34,11 +34,11 @@ struct LoopBarChartView: View {
                 }
             }
             .chartXAxis {
-                AxisMarks(position: .bottom) { value in
+                AxisMarks(preset: .aligned, position: .bottom) { value in
                     if let percentage = value.as(Double.self) {
                         if selectedInterval != .today {
-                            AxisValueLabel {
-                                Text("\(Int(percentage))%")
+                            AxisValueLabel(anchor: .top) {
+                                Text((percentage / 100).formatted(.wholePercent))
                                     .font(.footnote)
                             }
                         }
@@ -49,6 +49,8 @@ struct LoopBarChartView: View {
             .chartXScale(domain: 0 ... 100)
             .frame(height: 200)
             .padding()
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text("Looping performance bar chart"))
         }
     }
 

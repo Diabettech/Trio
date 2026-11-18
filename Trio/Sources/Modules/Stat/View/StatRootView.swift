@@ -18,6 +18,7 @@ extension Stat {
         @State var state = StateModel()
         @State private var selectedView: StateModel.StatisticViewType = .glucose
         @State private var isGlucoseDaySelected: Bool = false
+        @State private var showExportMenu = false
 
         private var intervalOptions: [Stat.StateModel.StatsTimeIntervalWithToday] {
             state.selectedGlucoseChartType == .percentileByDay || state.selectedGlucoseChartType == .distributionByDay
@@ -51,6 +52,8 @@ extension Stat {
                 }
             }
             .background(appState.trioBackgroundColor(for: colorScheme))
+            // Dense charts and stat grids shatter at accessibility sizes; cap tighter than the global bound.
+            .dynamicTypeSize(...DynamicTypeSize.xxLarge)
             .onAppear(perform: configureView)
             .navigationBarTitleDisplayMode(.inline)
             .navigationTitle("Statistics")
@@ -61,6 +64,14 @@ extension Stat {
                             .foregroundColor(.tabBar)
                     }
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(action: { showExportMenu = true }) {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                }
+            }
+            .sheet(isPresented: $showExportMenu) {
+                StatExportMenuView(state: state)
             }
         }
 
@@ -105,15 +116,23 @@ extension Stat {
             } else {
                 timeInRangeCard
 
-                if !isGlucoseDaySelected && state.selectedGlucoseChartType != .percentileByDay && state
-                    .selectedGlucoseChartType != .distributionByDay
-                {
-                    glucoseStatsCard
-                }
+                if state.selectedGlucoseChartType == .glycemiaRiskIndex {
+                    StatCard {
+                        GRIExplanationView(result: GRICalculator.calculate(
+                            glucoseValues: state.glucoseFromPersistence.map { Int($0.glucose) }
+                        ), units: state.units)
+                    }
+                } else {
+                    if !isGlucoseDaySelected && state.selectedGlucoseChartType != .percentileByDay && state
+                        .selectedGlucoseChartType != .distributionByDay
+                    {
+                        glucoseStatsCard
+                    }
 
-                HStack {
-                    var hintText: String {
+                    var hintText: String? {
                         switch state.selectedGlucoseChartType {
+                        case .glycemiaRiskIndex:
+                            nil
                         case .percentileByTime:
                             String(localized: "Tap and hold the AGP graph or Time-in-Range ring to reveal more details.")
                         case .distributionByTime:
@@ -128,13 +147,17 @@ extension Stat {
                             )
                         }
                     }
-                    Image(systemName: "hand.draw.fill")
-                        .foregroundStyle(Color.primary)
-                        .padding(.leading)
-                    Text(hintText)
-                        .foregroundStyle(Color.secondary)
-                        .padding(.trailing)
-                }.font(.footnote)
+                    if let hintText {
+                        HStack {
+                            Image(systemName: "hand.draw.fill")
+                                .foregroundStyle(Color.primary)
+                                .padding(.leading)
+                            Text(hintText)
+                                .foregroundStyle(Color.secondary)
+                                .padding(.trailing)
+                        }.font(.footnote)
+                    }
+                }
             }
         }
 
@@ -178,6 +201,11 @@ extension Stat {
                                 state: state
                             )
                         }
+
+                    case .glycemiaRiskIndex:
+                        GRIChartView(result: GRICalculator.calculate(
+                            glucoseValues: state.glucoseFromPersistence.map { Int($0.glucose) }
+                        ), units: state.units)
 
                     case .percentileByTime:
                         GlucosePercentileChart(

@@ -140,6 +140,11 @@ struct GlucoseDailyPercentileChart: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
+            Text(units.rawValue)
+                .foregroundStyle(.secondary)
+                .font(.footnote)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+
             boxplotChart
                 .frame(height: 300)
 
@@ -285,35 +290,7 @@ struct GlucoseDailyPercentileChart: View {
             }
         }
         .chartXAxis {
-            AxisMarks(preset: .aligned, values: .stride(by: .day)) { value in
-                if let date = value.as(Date.self) {
-                    let calendar = Calendar.current
-
-                    switch selectedInterval {
-                    case .month:
-                        // Mark the first day of the week
-                        let weekday = calendar.component(.weekday, from: date)
-                        if weekday == calendar.firstWeekday {
-                            AxisValueLabel(format: .dateTime.day(), centered: true)
-                                .font(.footnote)
-                            AxisGridLine()
-                        }
-                    case .total:
-                        // Mark the start of the month
-                        let day = calendar.component(.day, from: date)
-                        if day == 1 {
-                            AxisValueLabel(format: .dateTime.month(.abbreviated), centered: true)
-                                .font(.footnote)
-                            AxisGridLine()
-                        }
-                    default:
-                        // Mark every day
-                        AxisValueLabel(format: .dateTime.weekday(.abbreviated), centered: true)
-                            .font(.footnote)
-                        AxisGridLine()
-                    }
-                }
-            }
+            StatChartUtils.dateAxisMarks(for: selectedInterval)
         }
         .chartYScale(domain: glucoseYScaleDomain())
         .chartXSelection(value: $selectedDate.animation(.easeInOut))
@@ -344,6 +321,8 @@ struct GlucoseDailyPercentileChart: View {
             )
         )
         .chartXVisibleDomain(length: StatChartUtils.visibleDomainLength(for: selectedInterval))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("Daily glucose percentile chart"))
     }
 
     // MARK: - Chart Components
@@ -396,25 +375,6 @@ struct GlucoseDailyPercentileChart: View {
 
     // Calculate an appropriate Y axis domain for the chart
     private func glucoseYScaleDomain() -> ClosedRange<Double> {
-        let padding = units == .mgdL ? 20.0 : 1.0
-        let bottomLimit = 40.0.asUnit(units)
-        let topLimit = 400.0.asUnit(units)
-
-        if visibleDailyStats.isEmpty {
-            return bottomLimit ... topLimit
-        }
-
-        var allValues: [Double] = []
-        for day in visibleDailyStats where day.minimum > 0 {
-            allValues.append(day.maximum.asUnit(units))
-        }
-
-        guard !allValues.isEmpty else {
-            return bottomLimit ... topLimit
-        }
-
-        let maxValue = allValues.max() ?? topLimit
-
-        return bottomLimit ... max(Double(highLimit.asUnit(units)), maxValue + padding)
+        StatChartUtils.glucosePercentileYScaleDomain(for: visibleDailyStats, highLimit: highLimit, units: units)
     }
 }

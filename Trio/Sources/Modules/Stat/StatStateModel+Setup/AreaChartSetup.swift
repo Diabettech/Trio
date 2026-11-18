@@ -73,17 +73,28 @@ extension Stat.StateModel {
     /// - A light blue area for the wider range (10th-90th percentile)
     /// - A solid blue line for the median
     func calculateHourlyStatsForGlucoseAreaChart(from ids: [NSManagedObjectID]) async {
+        let stats = await Self.computeHourlyStats(from: ids)
+
+        // Update stats on main thread
+        await MainActor.run {
+            self.hourlyStats = stats
+        }
+    }
+
+    /// Hourly glucose percentile stats, computed without changing published state.
+    /// Used by the AGP chart and the PDF export.
+    static func computeHourlyStats(from ids: [NSManagedObjectID]) async -> [HourlyStats] {
         let taskContext = CoreDataStack.shared.newTaskContext()
 
         let calendar = Calendar.current
 
-        let stats = await taskContext.perform {
+        return await taskContext.perform {
             // Convert IDs to GlucoseStored objects using the context
             let readings = ids.compactMap { id -> GlucoseStored? in
                 do {
                     return try taskContext.existingObject(with: id) as? GlucoseStored
                 } catch {
-                    debugPrint("\(DebuggingIdentifiers.failed) Error fetching glucose: \(error)")
+                    warning(.ui, "Loading glucose for statistics chart failed", error: error)
                     return nil
                 }
             }
@@ -134,11 +145,6 @@ extension Stat.StateModel {
                     percentile90: values[Int(count * 0.90)] // Upper whisker
                 )
             }
-        }
-
-        // Update stats on main thread
-        await MainActor.run {
-            self.hourlyStats = stats
         }
     }
 }

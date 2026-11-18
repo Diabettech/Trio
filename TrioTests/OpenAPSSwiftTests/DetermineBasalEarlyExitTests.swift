@@ -10,7 +10,6 @@ import Testing
         iobData: [IobResult],
         mealData: ComputedCarbs,
         autosensData: Autosens,
-        reservoirData: Decimal,
         glucoseStatus: GlucoseStatus,
         microBolusAllowed: Bool,
         trioCustomOrefVariables: TrioCustomOrefVariables,
@@ -124,7 +123,6 @@ import Testing
             iobData: iobData,
             mealData: mealData,
             autosensData: autosensData,
-            reservoirData: 100,
             glucoseStatus: glucoseStatus,
             microBolusAllowed: true,
             trioCustomOrefVariables: trioCustomOrefVariables,
@@ -141,7 +139,6 @@ import Testing
             iobData,
             mealData,
             autosensData,
-            reservoirData,
             glucoseStatus,
             microBolusAllowed,
             trioCustomOrefVariables,
@@ -158,7 +155,6 @@ import Testing
                 iobData: iobData,
                 mealData: mealData,
                 autosensData: autosensData,
-                reservoirData: reservoirData,
                 glucoseStatus: glucoseStatus,
                 microBolusAllowed: microBolusAllowed,
                 trioCustomOrefVariables: trioCustomOrefVariables,
@@ -176,7 +172,6 @@ import Testing
             iobData,
             mealData,
             autosensData,
-            reservoirData,
             _,
             microBolusAllowed,
             trioCustomOrefVariables,
@@ -202,7 +197,6 @@ import Testing
             iobData: iobData,
             mealData: mealData,
             autosensData: autosensData,
-            reservoirData: reservoirData,
             glucoseStatus: glucoseStatus,
             microBolusAllowed: microBolusAllowed,
             trioCustomOrefVariables: trioCustomOrefVariables,
@@ -223,7 +217,6 @@ import Testing
             iobData,
             mealData,
             autosensData,
-            reservoirData,
             _,
             microBolusAllowed,
             trioCustomOrefVariables,
@@ -250,7 +243,6 @@ import Testing
             iobData: iobData,
             mealData: mealData,
             autosensData: autosensData,
-            reservoirData: reservoirData,
             glucoseStatus: glucoseStatus,
             microBolusAllowed: microBolusAllowed,
             trioCustomOrefVariables: trioCustomOrefVariables,
@@ -271,7 +263,6 @@ import Testing
             iobData,
             mealData,
             autosensData,
-            reservoirData,
             _,
             microBolusAllowed,
             trioCustomOrefVariables,
@@ -298,7 +289,6 @@ import Testing
             iobData: iobData,
             mealData: mealData,
             autosensData: autosensData,
-            reservoirData: reservoirData,
             glucoseStatus: glucoseStatus,
             microBolusAllowed: microBolusAllowed,
             trioCustomOrefVariables: trioCustomOrefVariables,
@@ -319,7 +309,6 @@ import Testing
             iobData,
             mealData,
             autosensData,
-            reservoirData,
             glucoseStatus,
             microBolusAllowed,
             trioCustomOrefVariables,
@@ -335,7 +324,6 @@ import Testing
                 iobData: iobData,
                 mealData: mealData,
                 autosensData: autosensData,
-                reservoirData: reservoirData,
                 glucoseStatus: glucoseStatus,
                 microBolusAllowed: microBolusAllowed,
                 trioCustomOrefVariables: trioCustomOrefVariables,
@@ -353,7 +341,6 @@ import Testing
             iobData,
             mealData,
             autosensData,
-            reservoirData,
             glucoseStatus,
             microBolusAllowed,
             trioCustomOrefVariables,
@@ -380,7 +367,6 @@ import Testing
             iobData: mutableIobData,
             mealData: mealData,
             autosensData: autosensData,
-            reservoirData: reservoirData,
             glucoseStatus: glucoseStatus,
             microBolusAllowed: microBolusAllowed,
             trioCustomOrefVariables: trioCustomOrefVariables,
@@ -406,7 +392,6 @@ import Testing
             iobData,
             mealData,
             autosensData,
-            reservoirData,
             glucoseStatus,
             microBolusAllowed,
             trioCustomOrefVariables,
@@ -433,7 +418,6 @@ import Testing
             iobData: mutableIobData,
             mealData: mealData,
             autosensData: autosensData,
-            reservoirData: reservoirData,
             glucoseStatus: glucoseStatus,
             microBolusAllowed: microBolusAllowed,
             trioCustomOrefVariables: trioCustomOrefVariables,
@@ -458,7 +442,6 @@ import Testing
             iobData,
             mealData,
             autosensData,
-            reservoirData,
             glucoseStatus,
             microBolusAllowed,
             trioCustomOrefVariables,
@@ -474,7 +457,6 @@ import Testing
                 iobData: iobData,
                 mealData: mealData,
                 autosensData: autosensData,
-                reservoirData: reservoirData,
                 glucoseStatus: glucoseStatus,
                 microBolusAllowed: microBolusAllowed,
                 trioCustomOrefVariables: trioCustomOrefVariables,
@@ -492,7 +474,6 @@ import Testing
             iobData,
             mealData,
             autosensData,
-            reservoirData,
             _,
             microBolusAllowed,
             trioCustomOrefVariables,
@@ -517,7 +498,6 @@ import Testing
             iobData: iobData,
             mealData: mealData,
             autosensData: autosensData,
-            reservoirData: reservoirData,
             glucoseStatus: glucoseStatus,
             microBolusAllowed: microBolusAllowed,
             trioCustomOrefVariables: trioCustomOrefVariables,
@@ -543,7 +523,6 @@ import Testing
             iobData,
             mealData,
             autosensData,
-            reservoirData,
             glucoseStatus,
             microBolusAllowed,
             trioCustomOrefVariables,
@@ -559,7 +538,6 @@ import Testing
             iobData: iobData,
             mealData: mealData,
             autosensData: autosensData,
-            reservoirData: reservoirData,
             glucoseStatus: glucoseStatus,
             microBolusAllowed: microBolusAllowed,
             trioCustomOrefVariables: trioCustomOrefVariables,
@@ -569,5 +547,95 @@ import Testing
         #expect(result?.rate == 0)
         #expect(result?.duration == 0)
         #expect(result?.reason.contains("Canceling temp") == true)
+    }
+
+    // MARK: - Basal Testing (suspendOnly)
+
+    /// Falling glucose that would normally earn a low temp: Basal Testing must leave it alone.
+    private func fallingGlucoseInputs(currentTime: Date) -> GlucoseStatus {
+        GlucoseStatus(
+            delta: -4,
+            glucose: 105,
+            noise: 1,
+            shortAvgDelta: -4,
+            longAvgDelta: -4,
+            date: currentTime,
+            lastCalIndex: nil,
+            device: "test"
+        )
+    }
+
+    @Test("Basal testing holds the scheduled rate where other modes would trim it") func basalTestingHoldsScheduledBasal() throws {
+        let (
+            defaultProfile, preferences, _, iobData, mealData, autosensData,
+            _, microBolusAllowed, trioCustomOrefVariables, currentTime
+        ) = createDefaultInputs()
+        let glucoseStatus = fallingGlucoseInputs(currentTime: currentTime)
+        let currentTemp = TempBasal(duration: 0, rate: 0, temp: .absolute, timestamp: currentTime)
+
+        func run(suspendOnly: Bool) throws -> Determination? {
+            var profile = defaultProfile
+            profile.suspendOnly = suspendOnly
+            return try DeterminationGenerator.determineBasal(
+                profile: profile,
+                preferences: preferences,
+                currentTemp: currentTemp,
+                iobData: iobData,
+                mealData: mealData,
+                autosensData: autosensData,
+                glucoseStatus: glucoseStatus,
+                microBolusAllowed: microBolusAllowed,
+                trioCustomOrefVariables: trioCustomOrefVariables,
+                currentTime: currentTime
+            )
+        }
+
+        let normal = try run(suspendOnly: false)
+        let basalTesting = try run(suspendOnly: true)
+
+        // Basal testing recommends nothing at all, so no temp basal is ever commanded.
+        #expect(basalTesting?.rate == nil)
+        #expect(basalTesting?.duration == nil)
+        #expect(basalTesting?.reason.contains("basal testing") == true)
+        // The unconstrained path really did want to act here, so this is not a vacuous pass.
+        #expect(normal?.rate != nil)
+    }
+
+    @Test("Basal testing still suspends for a genuine low") func basalTestingStillSuspends() throws {
+        let (
+            defaultProfile, preferences, _, iobData, mealData, autosensData,
+            _, microBolusAllowed, trioCustomOrefVariables, currentTime
+        ) = createDefaultInputs()
+        var profile = defaultProfile
+        profile.suspendOnly = true
+
+        let glucoseStatus = GlucoseStatus(
+            delta: -3,
+            glucose: 65,
+            noise: 1,
+            shortAvgDelta: -3,
+            longAvgDelta: -3,
+            date: currentTime,
+            lastCalIndex: nil,
+            device: "test"
+        )
+        let currentTemp = TempBasal(duration: 30, rate: 1.5, temp: .absolute, timestamp: currentTime)
+
+        let result = try DeterminationGenerator.determineBasal(
+            profile: profile,
+            preferences: preferences,
+            currentTemp: currentTemp,
+            iobData: iobData,
+            mealData: mealData,
+            autosensData: autosensData,
+            glucoseStatus: glucoseStatus,
+            microBolusAllowed: microBolusAllowed,
+            trioCustomOrefVariables: trioCustomOrefVariables,
+            currentTime: currentTime
+        )
+
+        // Below threshold the low-glucose suspend runs before the basal-testing exit.
+        #expect(result?.rate == 0)
+        #expect(result?.reason.contains("basal testing") == false)
     }
 }

@@ -23,6 +23,17 @@ struct BolusInputView: View {
     )
 
     var body: some View {
+        let bolusIncrement = Double(truncating: state.bolusIncrement as NSNumber)
+        let adjustedBolusAmount = floor(bolusAmount / bolusIncrement) * bolusIncrement
+
+        // In the "Meal & Bolus" flow the user can dial insulin down to zero (or the
+        // recommendation itself is zero). In that case there is nothing to bolus, so
+        // offer a plain "Log Carbs" action instead of a dead-end disabled button.
+        let isCarbsOnly = state.carbsAmount > 0 && adjustedBolusAmount <= 0
+        let actionButtonLabel = isCarbsOnly
+            ? String(localized: "No Bolus, Log Carbs", comment: "Button Label to Log Carbs on Watch")
+            : String(localized: "Enact Bolus")
+
         VStack {
             if state.showBolusCalculationProgress {
                 ProgressView(String(
@@ -62,9 +73,6 @@ struct BolusInputView: View {
                         .disabled(bolusAmount <= 0)
 
                         Spacer()
-
-                        let bolusIncrement = Double(truncating: state.bolusIncrement as NSNumber)
-                        let adjustedBolusAmount = floor(bolusAmount / bolusIncrement) * bolusIncrement
 
                         Text(String(format: "%.2f \(String(localized: "U", comment: "Insulin unit"))", adjustedBolusAmount))
                             .fontWeight(.bold)
@@ -112,13 +120,18 @@ struct BolusInputView: View {
                             .foregroundColor(.loopRed)
                     }
 
-                    Button("Enact Bolus") {
-                        state.bolusAmount = min(bolusAmount, effectiveBolusLimit)
-                        navigationPath.append(NavigationDestinations.bolusConfirm)
+                    Button(actionButtonLabel) {
+                        if isCarbsOnly {
+                            state.sendCarbsEntry(state.carbsAmount)
+                            navigationPath.append(NavigationDestinations.acknowledgmentPending)
+                        } else {
+                            state.bolusAmount = min(bolusAmount, effectiveBolusLimit)
+                            navigationPath.append(NavigationDestinations.bolusConfirm)
+                        }
                     }
                     .buttonStyle(.bordered)
                     .tint(Color.insulin)
-                    .disabled(!(bolusAmount > 0.0) || bolusAmount > effectiveBolusLimit)
+                    .disabled(!isCarbsOnly && (!(bolusAmount > 0.0) || bolusAmount > effectiveBolusLimit))
 
                     Text(String(
                         format: "\(String(localized: "Recommended:", comment: "Recommended bolus on Watch")) %.1f \(String(localized: "U", comment: "Insulin unit"))",
@@ -142,7 +155,10 @@ struct BolusInputView: View {
                     .clipShape(Circle())
             }
         }
+        // The entry's 2 min clock restarts whenever the amount changes, including a recommendation landing
+        .onChange(of: bolusAmount) { state.markEntryEdited() }
         .onAppear {
+            state.markEntryEdited()
             // Set initial bolus amount to recommended value
             // Only do this if user has not updated amount previously, e.g., when navigating to next and then back to this view
             if bolusAmount == 0 {

@@ -161,52 +161,18 @@ struct GlucoseDailyDistributionChart: View {
         }
         .chartYScale(domain: 0 ... 100)
         .chartXAxis {
-            AxisMarks(preset: .aligned, values: .stride(by: .day)) { value in
-                if let date = value.as(Date.self) {
-                    let calendar = Calendar.current
-
-                    switch selectedInterval {
-                    case .month:
-                        // Mark the first day of the week
-                        let weekday = calendar.component(.weekday, from: date)
-                        if weekday == calendar.firstWeekday {
-                            AxisValueLabel(format: .dateTime.day(), centered: true)
-                                .font(.footnote)
-                            AxisGridLine()
-                        }
-                    case .total:
-                        // Mark the start of the month
-                        let day = calendar.component(.day, from: date)
-                        if day == 1 {
-                            AxisValueLabel(format: .dateTime.month(.abbreviated), centered: true)
-                                .font(.footnote)
-                            AxisGridLine()
-                        }
-                    default:
-                        // Mark every day
-                        AxisValueLabel(format: .dateTime.weekday(.abbreviated), centered: true)
-                            .font(.footnote)
-                        AxisGridLine()
-                    }
-                }
-            }
+            StatChartUtils.dateAxisMarks(for: selectedInterval)
         }
         .chartYAxis {
             AxisMarks(position: .trailing, values: [4, 25, 50, 75, 100]) { value in
                 if let percentage = value.as(Double.self) {
                     AxisValueLabel {
-                        Text((percentage / 100).formatted(.percent.precision(.fractionLength(0))))
+                        Text((percentage / 100).formatted(.wholePercent))
                             .font(.footnote)
                     }
                     AxisGridLine()
                 }
             }
-        }
-        .chartYAxisLabel(alignment: .trailing) {
-            Text("Percentage")
-                .foregroundStyle(.primary)
-                .font(.footnote)
-                .padding(.vertical, 3)
         }
         .chartScrollableAxes(.horizontal)
         .chartScrollPosition(x: $scrollPosition.animation(.easeInOut))
@@ -219,26 +185,18 @@ struct GlucoseDailyDistributionChart: View {
             )
         )
         .chartXVisibleDomain(length: StatChartUtils.visibleDomainLength(for: selectedInterval))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("Daily glucose distribution chart"))
     }
 
     /// Formats a short string with the glucose values of the requested range.
     private func legend(_ rangeName: String) -> String {
-        switch rangeName {
-        case "veryLow":
-            return "<\(Decimal(54).formatted(for: units))"
-        case "low":
-            return "\(Decimal(54).formatted(for: units))-\(Decimal(timeInRangeType.bottomThreshold - 1).formatted(for: units))"
-        case "inSmallRange":
-            return "\(Decimal(timeInRangeType.bottomThreshold).formatted(for: units))-\(Decimal(timeInRangeType.topThreshold).formatted(for: units))"
-        case "inRange":
-            return "\(Decimal(timeInRangeType.topThreshold + 1).formatted(for: units))-\(highLimit.formatted(for: units))"
-        case "high":
-            return "\((highLimit + 1).formatted(for: units))-\(Decimal(250).formatted(for: units))"
-        case "veryHigh":
-            return ">\(Decimal(250).formatted(for: units))"
-        default:
-            return "error"
-        }
+        StatChartUtils.glucoseDistributionRangeLabel(
+            rangeName,
+            highLimit: highLimit,
+            units: units,
+            timeInRangeType: timeInRangeType
+        )
     }
 
     /// Creates a bar mark for the requested date and range

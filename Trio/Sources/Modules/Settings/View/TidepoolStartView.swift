@@ -21,23 +21,26 @@ struct TidepoolStartView: BaseView {
                 content:
                 {
                     VStack {
-                        if let serviceUIType = state.serviceUIType,
-                           let pluginHost = state.provider.tidepoolManager.getTidepoolPluginHost()
+                        if state.serviceUIType != nil,
+                           state.provider.tidepoolManager.getTidepoolPluginHost() != nil
                         {
-                            if let serviceUI = state.provider.tidepoolManager.getTidepoolServiceUI()
+                            if state.provider.tidepoolManager.getTidepoolServiceUI() != nil
                             {
                                 Button {
                                     state.setupTidepool.toggle()
                                 }
                                 label: {
+                                    let isAuthenticated = !state.provider.tidepoolManager.tidepoolLoginRequired.value
                                     HStack {
-                                        Text("Connected to Tidepool").font(.title3)
+                                        (isAuthenticated ? Text("Connected to Tidepool") : Text("Tidepool Login Required"))
+                                            .font(.title3)
                                         ZStack {
                                             Image(systemName: "network")
-                                            Image(systemName: "checkmark.circle.fill")
-                                                .foregroundColor(.green).font(.caption2)
+                                            Image(systemName: isAuthenticated ? "checkmark.circle.fill" : "xmark.circle.fill")
+                                                .foregroundColor(isAuthenticated ? .green : .red).font(.caption2)
                                                 .offset(x: 9, y: 6)
                                         }
+                                        .accessibilityHidden(true)
                                     }
                                 }
                                 .frame(maxWidth: .infinity, alignment: .center)
@@ -57,6 +60,8 @@ struct TidepoolStartView: BaseView {
                                 .font(.footnote)
                                 .foregroundColor(.secondary)
                                 .lineLimit(nil)
+                                .multilineTextAlignment(.leading)
+                                .fixedSize(horizontal: false, vertical: true)
                             Spacer()
                             Button(
                                 action: {
@@ -64,7 +69,7 @@ struct TidepoolStartView: BaseView {
                                 },
                                 label: {
                                     HStack {
-                                        Image(systemName: "questionmark.circle")
+                                        Image(systemName: "questionmark.circle").accessibilityLabel(Text("More information"))
                                     }
                                 }
                             ).buttonStyle(BorderlessButtonStyle())

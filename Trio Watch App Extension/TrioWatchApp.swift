@@ -5,7 +5,9 @@ import UserNotifications
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
+        _ = WatchState.shared
         WatchNotificationHandler.shared.configure()
+        WatchLogger.shared.info(.lifecycle, "App launched")
     }
 
     var body: some Scene {
@@ -13,10 +15,12 @@ import UserNotifications
             TrioMainWatchView()
         }
         .onChange(of: scenePhase) { _, newScenePhase in
+            WatchState.shared.setAppActive(newScenePhase == .active)
             if newScenePhase == .background {
-                Task {
-                    await WatchLogger.shared.flushPersistedLogs()
-                }
+                WatchLogger.shared.info(.lifecycle, "App moved to background")
+                WatchLogger.shared.didEnterBackground()
+            } else if newScenePhase == .active {
+                WatchState.shared.refreshIfNeeded()
             }
         }
     }
