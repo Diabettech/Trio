@@ -803,6 +803,16 @@ final class BaseWatchManager: NSObject, WCSessionDelegate, Injectable, WatchMana
     }
 
     func session(_: WCSession, didReceiveUserInfo userInfo: [String: Any] = [:]) {
+        if let batch = WatchActivityFeed.decode(userInfo) {
+            let nowMs = Date().timeIntervalSince1970 * 1000
+            WatchActivityFeedStore.shared.ingest(batch, receivedAtMs: nowMs)
+            debug(
+                .watch,
+                "Watch activity batch: \(batch.heartRate.count) HR, \(batch.steps.count) step samples, sent \(Int((nowMs - batch.sentAtMs) / 1000)) s ago"
+            )
+            return
+        }
+
         if let logs = userInfo["watchLogs"] as? String {
             WatchLogIngest.legacyRecords(from: logs).forEach(TrioLogger.sink.accept)
         }

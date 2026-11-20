@@ -336,6 +336,7 @@
 		3BBC22632DF5B94100169236 /* AutosensTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BBC22622DF5B93900169236 /* AutosensTests.swift */; };
 		B0057150A11F2026BA5E0002 /* BoostISFAutosensTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0057150A11F2026BA5E0001 /* BoostISFAutosensTests.swift */; };
 		B005715ACF2026115E200002 /* BoostStepReadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B005715ACF2026115E200001 /* BoostStepReadTests.swift */; };
+		B00A7F1ED202611200000009 /* WatchActivityFeedStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00A7F1ED202611200000008 /* WatchActivityFeedStoreTests.swift */; };
 		3BC07D6F3017B837004F96AF /* DecimalExtensions+SwiftUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BC07D6E3017B830004F96AF /* DecimalExtensions+SwiftUI.swift */; };
 		3BC26E552D7418830066ACD6 /* IobSuspendTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BC26E542D7418830066ACD6 /* IobSuspendTests.swift */; };
 		3BCA5F7C2DC7B16400A7EAC7 /* pumphistory-with-external.json in Resources */ = {isa = PBXBuildFile; fileRef = 3BCA5F7B2DC7B15400A7EAC7 /* pumphistory-with-external.json */; };
@@ -478,6 +479,7 @@
 		7A11AC0DE00000000000011D /* PumpEventPredicateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A11AC0DE00000000000001D /* PumpEventPredicateTests.swift */; };
 		7A11AC0DE000000000000171 /* GlassActionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A11AC0DE000000000000170 /* GlassActionSheet.swift */; };
 		753CD96BE6A4BC05A41D2791 /* BoostActivityMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5ACC67959A8589D3E0BCB163 /* BoostActivityMonitor.swift */; };
+		B00A7F1ED202611200000005 /* WatchActivityFeedStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00A7F1ED202611200000004 /* WatchActivityFeedStore.swift */; };
 		79EEE89832BBA5D02E253115 /* BoostMealTimeStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88B16885B4F291F9FF4BDED2 /* BoostMealTimeStore.swift */; };
 		7F7B756BE8543965D9FDF1A2 /* HistoryDataFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A401509D21F7F35D4E109EDA /* HistoryDataFlow.swift */; };
 		87F4D02B8D4D4D329BA291D2 /* QuickPickTreatmentsConfigStateModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 91711E7CA54747EFAD6540EE /* QuickPickTreatmentsConfigStateModel.swift */; };
@@ -716,6 +718,8 @@
 		BD4064D12C4ED26900582F43 /* CoreDataObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD4064D02C4ED26900582F43 /* CoreDataObserver.swift */; };
 		BD432CA12D2F4E3600D1EB79 /* WatchMessageKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD432CA02D2F4E3300D1EB79 /* WatchMessageKeys.swift */; };
 		BD432CA22D2F4E4000D1EB79 /* WatchMessageKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD432CA02D2F4E3300D1EB79 /* WatchMessageKeys.swift */; };
+		B00A7F1ED202611200000002 /* WatchActivityFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00A7F1ED202611200000001 /* WatchActivityFeed.swift */; };
+		B00A7F1ED202611200000003 /* WatchActivityFeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00A7F1ED202611200000001 /* WatchActivityFeed.swift */; };
 		BD47FD132D88AA700043966B /* OnboardingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD47FD122D88AA6B0043966B /* OnboardingManager.swift */; };
 		BD47FD172D88AAF50043966B /* CompletedStepView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD47FD162D88AAEF0043966B /* CompletedStepView.swift */; };
 		BD47FD192D88AAFE0043966B /* OnboardingRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD47FD182D88AAF90043966B /* OnboardingRootView.swift */; };
@@ -1143,6 +1147,7 @@
 		DDFF202F2DB1D14500AB8A96 /* NotificationPermissionStepView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDFF202E2DB1D14500AB8A96 /* NotificationPermissionStepView.swift */; };
 		DDFF20312DB1D15500AB8A96 /* BluetoothPermissionStepView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDFF20302DB1D15500AB8A96 /* BluetoothPermissionStepView.swift */; };
 		DDFF204A2DB29EF500AB8A96 /* WatchLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDFF20492DB29EF500AB8A96 /* WatchLogger.swift */; };
+		B00A7F1ED202611200000007 /* WatchActivityReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00A7F1ED202611200000006 /* WatchActivityReader.swift */; };
 		DECF1903237041E2BBBE4033 /* QuickPickTreatmentsInfoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1526A587AD1544C495050662 /* QuickPickTreatmentsInfoView.swift */; };
 		E00EEC0327368630002FF094 /* ServiceAssembly.swift in Sources */ = {isa = PBXBuildFile; fileRef = E00EEBFD27368630002FF094 /* ServiceAssembly.swift */; };
 		E00EEC0427368630002FF094 /* SecurityAssembly.swift in Sources */ = {isa = PBXBuildFile; fileRef = E00EEBFE27368630002FF094 /* SecurityAssembly.swift */; };
@@ -1611,6 +1616,7 @@
 		3BBC22622DF5B93900169236 /* AutosensTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutosensTests.swift; sourceTree = "<group>"; };
 		B0057150A11F2026BA5E0001 /* BoostISFAutosensTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoostISFAutosensTests.swift; sourceTree = "<group>"; };
 		B005715ACF2026115E200001 /* BoostStepReadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoostStepReadTests.swift; sourceTree = "<group>"; };
+		B00A7F1ED202611200000008 /* WatchActivityFeedStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchActivityFeedStoreTests.swift; sourceTree = "<group>"; };
 		3BC07D6E3017B830004F96AF /* DecimalExtensions+SwiftUI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DecimalExtensions+SwiftUI.swift"; sourceTree = "<group>"; };
 		3BC26E542D7418830066ACD6 /* IobSuspendTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IobSuspendTests.swift; sourceTree = "<group>"; };
 		3BCA5F7B2DC7B15400A7EAC7 /* pumphistory-with-external.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "pumphistory-with-external.json"; sourceTree = "<group>"; };
@@ -1696,6 +1702,7 @@
 		5E12FE0E2EBC0000000000A1 /* LibreLoop.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = LibreLoop.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		5E12FE0E2EBC0000000000A2 /* LibreLoopUI.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = LibreLoopUI.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		5ACC67959A8589D3E0BCB163 /* BoostActivityMonitor.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = BoostActivityMonitor.swift; path = Trio/Sources/Services/HealthKit/BoostActivityMonitor.swift; sourceTree = "<group>"; };
+		B00A7F1ED202611200000004 /* WatchActivityFeedStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WatchActivityFeedStore.swift; path = Trio/Sources/Services/HealthKit/WatchActivityFeedStore.swift; sourceTree = "<group>"; };
 		5FF867EB72F8DF29A1503BCD /* HrSourceResolver.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = HrSourceResolver.swift; path = BoostPort/BoostV5Core/Sources/BoostV5Core/HrSourceResolver.swift; sourceTree = "<group>"; };
 		60744C3E9BB3652895C908CC /* HistoryProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HistoryProvider.swift; sourceTree = "<group>"; };
 		621F1DA0758AAA87D5E16203 /* SafetyGates.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = SafetyGates.swift; path = BoostPort/BoostV5Core/Sources/BoostV5Core/SafetyGates.swift; sourceTree = "<group>"; };
@@ -2004,6 +2011,7 @@
 		BD3CC0712B0B89D50013189E /* MainChartView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainChartView.swift; sourceTree = "<group>"; };
 		BD4064D02C4ED26900582F43 /* CoreDataObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreDataObserver.swift; sourceTree = "<group>"; };
 		BD432CA02D2F4E3300D1EB79 /* WatchMessageKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchMessageKeys.swift; sourceTree = "<group>"; };
+		B00A7F1ED202611200000001 /* WatchActivityFeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchActivityFeed.swift; sourceTree = "<group>"; };
 		BD47FD122D88AA6B0043966B /* OnboardingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingManager.swift; sourceTree = "<group>"; };
 		BD47FD162D88AAEF0043966B /* CompletedStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompletedStepView.swift; sourceTree = "<group>"; };
 		BD47FD182D88AAF90043966B /* OnboardingRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingRootView.swift; sourceTree = "<group>"; };
@@ -2431,6 +2439,7 @@
 		DDFF202E2DB1D14500AB8A96 /* NotificationPermissionStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPermissionStepView.swift; sourceTree = "<group>"; };
 		DDFF20302DB1D15500AB8A96 /* BluetoothPermissionStepView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BluetoothPermissionStepView.swift; sourceTree = "<group>"; };
 		DDFF20492DB29EF500AB8A96 /* WatchLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchLogger.swift; sourceTree = "<group>"; };
+		B00A7F1ED202611200000006 /* WatchActivityReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchActivityReader.swift; sourceTree = "<group>"; };
 		E00EEBFD27368630002FF094 /* ServiceAssembly.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ServiceAssembly.swift; sourceTree = "<group>"; };
 		E00EEBFE27368630002FF094 /* SecurityAssembly.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = SecurityAssembly.swift; sourceTree = "<group>"; };
 		E00EEBFF27368630002FF094 /* StorageAssembly.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = StorageAssembly.swift; sourceTree = "<group>"; };
@@ -3495,6 +3504,7 @@
 				3811DE8E25C9D80400A708ED /* User.swift */,
 				DD3078672D42F5CE00DE0490 /* WatchGlucoseObject.swift */,
 				BD432CA02D2F4E3300D1EB79 /* WatchMessageKeys.swift */,
+				B00A7F1ED202611200000001 /* WatchActivityFeed.swift */,
 				BDA25EFC2D261BF200035F34 /* WatchState.swift */,
 			);
 			path = Models;
@@ -3674,6 +3684,7 @@
 			children = (
 				A1A0EDA730974FFF0028A032 /* GlucoseFormattingTests.swift */,
 				B005715ACF2026115E200001 /* BoostStepReadTests.swift */,
+				B00A7F1ED202611200000008 /* WatchActivityFeedStoreTests.swift */,
 				A1EF5D9A309CEF01007282CC /* DurationFormattingTests.swift */,
 				A1A0EDF43097CE470028A032 /* PercentFormattingTests.swift */,
 				DDDD0FFD2F4E231600F9C645 /* Mocks */,
@@ -4111,6 +4122,7 @@
 				7FF09F15E5D166A2E57B66BB /* BoostV5Adapter.swift */,
 				72788F47FB804BA093159C0E /* BoostV1Determination.swift */,
 				5ACC67959A8589D3E0BCB163 /* BoostActivityMonitor.swift */,
+				B00A7F1ED202611200000004 /* WatchActivityFeedStore.swift */,
 			);
 			name = BoostPort;
 			sourceTree = "<group>";
@@ -4607,6 +4619,7 @@
 			isa = PBXGroup;
 			children = (
 				DDFF20492DB29EF500AB8A96 /* WatchLogger.swift */,
+				B00A7F1ED202611200000006 /* WatchActivityReader.swift */,
 				BDA25EE52D260D5800035F34 /* WatchState.swift */,
 				BDAE3FFF2D372BA8009C12B1 /* WatchState+Requests.swift */,
 				DD3A3CEC2D29CFBA00AE478E /* Helper */,
@@ -6187,6 +6200,7 @@
 				DD6D67E42C9C253500660C9B /* ColorSchemeOption.swift in Sources */,
 				582DF9752C8CDB92001F516D /* GlucoseChartView.swift in Sources */,
 				BD432CA12D2F4E3600D1EB79 /* WatchMessageKeys.swift in Sources */,
+				B00A7F1ED202611200000002 /* WatchActivityFeed.swift in Sources */,
 				DD4C581F2D73C43D001BFF2C /* LoopStatsView.swift in Sources */,
 				58A3D53A2C96D4DE003F90FC /* AddTempTargetForm.swift in Sources */,
 				C21FE1E72DA59C6B007D550B /* GlucoseDailyDistributionChart.swift in Sources */,
@@ -6769,6 +6783,7 @@
 				897E7BDE461014310A97DA76 /* BoostV5Adapter.swift in Sources */,
 				3812380FDDDF4B319511814B /* BoostV1Determination.swift in Sources */,
 				753CD96BE6A4BC05A41D2791 /* BoostActivityMonitor.swift in Sources */,
+				B00A7F1ED202611200000005 /* WatchActivityFeedStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -6807,6 +6822,7 @@
 				3BBC22632DF5B94100169236 /* AutosensTests.swift in Sources */,
 				B0057150A11F2026BA5E0002 /* BoostISFAutosensTests.swift in Sources */,
 				B005715ACF2026115E200002 /* BoostStepReadTests.swift in Sources */,
+				B00A7F1ED202611200000009 /* WatchActivityFeedStoreTests.swift in Sources */,
 				BD8FC0542D66186000B95AED /* TestError.swift in Sources */,
 				FB9012AE66284A92A6531037 /* NightscoutUploadSerializerTests.swift in Sources */,
 				782BE9AEFDD94938A6F3EFE9 /* NightscoutImportRoundTripTests.swift in Sources */,
@@ -6947,6 +6963,7 @@
 				DD3A3CE72D29C93F00AE478E /* Helper+Extensions.swift in Sources */,
 				DD246F062D2836AA0027DDE0 /* GlucoseTrendView.swift in Sources */,
 				BD432CA22D2F4E4000D1EB79 /* WatchMessageKeys.swift in Sources */,
+				B00A7F1ED202611200000003 /* WatchActivityFeed.swift in Sources */,
 				C2BA6B9A2F7593C300348E6A /* NotificationIdentifiers.swift in Sources */,
 				DD8262CB2D289297009F6F62 /* BolusConfirmationView.swift in Sources */,
 				BD54A9712D281A8100F9C1EE /* TempTargetPresetsView.swift in Sources */,
@@ -6957,6 +6974,7 @@
 				BD04ECCE2D29952A008C5FEB /* BolusProgressOverlay.swift in Sources */,
 				DD09D5C92D29F3D0000D82C9 /* AcknowledgementPendingView.swift in Sources */,
 				DDFF204A2DB29EF500AB8A96 /* WatchLogger.swift in Sources */,
+				B00A7F1ED202611200000007 /* WatchActivityReader.swift in Sources */,
 				FF42480CF46A31D00C817D8C /* WatchLogEntry.swift in Sources */,
 				8B735B34F861E3AE08F5C9BE /* WatchLogRing.swift in Sources */,
 			);
@@ -7423,6 +7441,8 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "$(APP_DISPLAY_NAME)";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = "$(BUNDLE_IDENTIFIER)";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Trio reads heart rate and steps on the watch and sends them to Trio on your iPhone, which cannot read Health while it is locked.";
+				CODE_SIGN_ENTITLEMENTS = "Trio Watch App/TrioWatchApp.entitlements";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -7460,6 +7480,8 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "$(APP_DISPLAY_NAME)";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = "$(BUNDLE_IDENTIFIER)";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Trio reads heart rate and steps on the watch and sends them to Trio on your iPhone, which cannot read Health while it is locked.";
+				CODE_SIGN_ENTITLEMENTS = "Trio Watch App/TrioWatchApp.entitlements";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

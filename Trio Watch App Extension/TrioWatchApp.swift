@@ -7,6 +7,9 @@ import UserNotifications
     init() {
         _ = WatchState.shared
         WatchNotificationHandler.shared.configure()
+        // At every launch, background ones included: HealthKit's observers must be registered before
+        // it can deliver the samples that woke the app.
+        WatchActivityReader.shared.start()
         WatchLogger.shared.info(.lifecycle, "App launched")
     }
 

@@ -127,15 +127,48 @@ final class BaseBoostActivityMonitor: BoostActivityMonitor, Injectable {
         let stepSums = await [steps5Task, steps15Task, steps30Task, steps60Task]
         // A failed read is what HealthKit returns while the iPhone is locked. The windows then read 0,
         // which is not evidence of rest, so the inactivity raise is withheld (AAPS StepFeed).
-        let stepsAvailable = !stepSums.contains(nil)
-        let steps5 = Int(stepSums[0] ?? 0)
-        let steps15 = Int(stepSums[1] ?? 0)
-        let steps30 = stepSums[2] ?? 0
-        let steps60 = Int(stepSums[3] ?? 0)
-        let avgHr = await hrAvgTask ?? 0
-        let latestHr = await latestHrTask ?? 0
+        var stepsAvailable = !stepSums.contains(nil)
+        var steps5 = Int(stepSums[0] ?? 0)
+        var steps15 = Int(stepSums[1] ?? 0)
+        var steps30 = stepSums[2] ?? 0
+        var steps60 = Int(stepSums[3] ?? 0)
+        var avgHr = await hrAvgTask ?? 0
+        var latestHr = await latestHrTask ?? 0
         let restingHr = await restingTask ?? 0
-        let hrReadings = await hrReadingsTask
+        var hrReadings = await hrReadingsTask
+
+        // The watch feed (testing branch). A failed step read means Health is locked, so every read
+        // above failed with it; the watch's own samples stand in. HR carries its own timestamps, so
+        // the detector judges its freshness; steps count only while the feed is live and the watch is
+        // being worn, since a missing step sample is 0 steps only then. Feed steps lag by up to the
+        // 12-minute freshness, so an INACTIVE raise can outlast the start of activity by that much.
+        let feed = WatchActivityFeedStore.shared
+        let feedAgeMin = feed.ageMs(nowMs: nowMs).map { Int($0 / 60000) }
+        var feedNote = "watchFeed=" + (feedAgeMin.map { "\($0)m" } ?? "none")
+        if !stepsAvailable {
+            let hr = feed.heartRate(sinceMs: nowMs - 16 * 60000, nowMs: nowMs)
+            hrReadings = hr.map {
+                SleepHrReading(
+                    timestampMs: $0.endMs, beatsPerMinute: $0.value,
+                    durationMs: max($0.endMs - $0.startMs, 1000), isValid: true
+                )
+            }
+            let last15 = hr.filter { $0.endMs >= nowMs - 900_000 }
+            avgHr = last15.isEmpty ? 0 : last15.map(\.value).reduce(0, +) / Double(last15.count)
+            latestHr = last15.last?.value ?? 0
+            if feed.stepsUsable(nowMs: nowMs) {
+                steps5 = Int(feed.steps(sinceMs: nowMs - 300_000, nowMs: nowMs))
+                steps15 = Int(feed.steps(sinceMs: nowMs - 900_000, nowMs: nowMs))
+                steps30 = feed.steps(sinceMs: nowMs - 1_800_000, nowMs: nowMs)
+                steps60 = Int(feed.steps(sinceMs: nowMs - 3_600_000, nowMs: nowMs))
+                stepsAvailable = true
+            }
+            feedNote += " used(hr=\(hr.count) steps=\(stepsAvailable ? "live" : "stale"))"
+        } else if feed.isLive(nowMs: nowMs) {
+            // Health readable and the feed live: the two side by side, to see how far the feed lags.
+            feedNote += " vsHealth(steps60 \(Int(feed.steps(sinceMs: nowMs - 3_600_000, nowMs: nowMs)))/\(steps60)" +
+                " hr16 \(feed.heartRate(sinceMs: nowMs - 16 * 60000, nowMs: nowMs).count)/\(hrReadings.count))"
+        }
         let restingForCalc = restingHr > 0 ? restingHr : 60
 
         let prev = BoostActivityStore.shared.snapshot
@@ -397,7 +430,7 @@ final class BaseBoostActivityMonitor: BoostActivityMonitor, Injectable {
 
         debug(
             .healthKit,
-            "BoostActivityMonitor: steps5/15/30/60=\(steps5)/\(steps15)/\(Int(steps30))/\(steps60) hr=\(Int(latestHr)) rhr=\(Int(restingHr)) state=\(activity.state.rawValue) asleep=\(asleep) postEx=\(recovery.inRecoveryWindow) gate=\(raiseGateOpen)\(sleepSignals.boundaryHold ? " boundaryHold" : "")\(stepsAvailable ? "" : " steps:UNAVAILABLE")"
+            "BoostActivityMonitor: steps5/15/30/60=\(steps5)/\(steps15)/\(Int(steps30))/\(steps60) hr=\(Int(latestHr)) rhr=\(Int(restingHr)) state=\(activity.state.rawValue) asleep=\(asleep) postEx=\(recovery.inRecoveryWindow) gate=\(raiseGateOpen)\(sleepSignals.boundaryHold ? " boundaryHold" : "")\(stepsAvailable ? "" : " steps:UNAVAILABLE") \(feedNote)"
         )
         debug(
             .healthKit,
