@@ -54,6 +54,10 @@ public enum ExerciseState: String, Codable, Sendable {
     /// raise is withheld, since a missing heart rate is not evidence of rest (AAPS a33752c9aa #12,
     /// "HR_UNAVAILABLE").
     case hrUnavailable
+    /// The step feed is not delivering, so 0 steps is not evidence of rest: no INACTIVE raise and
+    /// the profile stays at 100% (AAPS StepFeed, "steps-unknown"). In Trio this is a locked iPhone,
+    /// whose Health store cannot be read.
+    case stepsUnknown
 }
 
 /// Configurable thresholds. Defaults match the AAPS Boost preference defaults.
@@ -133,6 +137,10 @@ public struct ActivityInputs: Equatable, Sendable {
     /// elevated-HR handling lower the profile or raise the target and run whatever it says
     /// (AAPS a33752c9aa #11). Defaults open, which is the behaviour before 2026-10-08.
     public var raiseGateOpen: Bool
+    /// The step counts were read (AAPS `StepFeed.available`). False when the feed is dark, where the
+    /// windows read 0 without meaning the person is still. Defaults true, the behaviour before
+    /// 2026-11-20.
+    public var stepsAvailable: Bool
     public var thresholds: ActivityThresholds
 
     public init(
@@ -145,6 +153,7 @@ public struct ActivityInputs: Equatable, Sendable {
         asleep: Bool = false,
         sleepInActive: Bool = false,
         raiseGateOpen: Bool = true,
+        stepsAvailable: Bool = true,
         thresholds: ActivityThresholds
     ) {
         self.steps5 = steps5
@@ -156,6 +165,7 @@ public struct ActivityInputs: Equatable, Sendable {
         self.asleep = asleep
         self.sleepInActive = sleepInActive
         self.raiseGateOpen = raiseGateOpen
+        self.stepsAvailable = stepsAvailable
         self.thresholds = thresholds
     }
 }
@@ -273,7 +283,8 @@ public enum ActivityClassifier {
         // 100/inactivityPct and lifts basal: it adds insulin. Reported live at 06:09, profile 130%
         // with glucose at 71 and falling. Three independent exclusions, none of which covers every
         // case alone: the configured clock window, the detector, and the morning lie-in.
-        if inputs.steps60 < t.inactivitySteps,
+        // A dark step feed reads 0 too, so the branch also needs the feed (AAPS StepFeed.inactivityStepsMet).
+        if inputs.stepsAvailable, inputs.steps60 < t.inactivitySteps,
            !inputs.inNightWindow, !inputs.asleep, !inputs.sleepInActive
         {
             // 2026-07-21 safety guard (AAPS 45f17cca5a), the companion to the dead-zone fix in
@@ -320,7 +331,7 @@ public enum ActivityClassifier {
             return result(.stress, profile: baselineProfilePercent, target: resistanceStressTargetBg)
         }
 
-        return result(.normal, profile: baselineProfilePercent, target: nil)
+        return result(inputs.stepsAvailable ? .normal : .stepsUnknown, profile: baselineProfilePercent, target: nil)
     }
 
     // MARK: - Helpers
@@ -432,6 +443,7 @@ public enum ActivityClassifier {
              .inactive,
              .normal,
              .resting,
+             .stepsUnknown,
              .stress: // STRESS is inert (AAPS dead code) — never an exercise state
             return false
         }

@@ -124,10 +124,14 @@ final class BaseBoostActivityMonitor: BoostActivityMonitor, Injectable {
         // this window is carried by the persisted lastFreshHrSampleMs.
         async let hrReadingsTask = fetchHrReadings(since: now.addingTimeInterval(-16 * 60), now: now)
 
-        let steps5 = Int(await steps5Task)
-        let steps15 = Int(await steps15Task)
-        let steps30 = await steps30Task
-        let steps60 = Int(await steps60Task)
+        let stepSums = await [steps5Task, steps15Task, steps30Task, steps60Task]
+        // A failed read is what HealthKit returns while the iPhone is locked. The windows then read 0,
+        // which is not evidence of rest, so the inactivity raise is withheld (AAPS StepFeed).
+        let stepsAvailable = !stepSums.contains(nil)
+        let steps5 = Int(stepSums[0] ?? 0)
+        let steps15 = Int(stepSums[1] ?? 0)
+        let steps30 = stepSums[2] ?? 0
+        let steps60 = Int(stepSums[3] ?? 0)
         let avgHr = await hrAvgTask ?? 0
         let latestHr = await latestHrTask ?? 0
         let restingHr = await restingTask ?? 0
@@ -281,6 +285,7 @@ final class BaseBoostActivityMonitor: BoostActivityMonitor, Injectable {
             avgHeartRate: hrFrozen ? 0 : avgHr,
             inNightWindow: inNightWindow, asleep: inBed, sleepInActive: lieIn,
             raiseGateOpen: raiseGateOpen,
+            stepsAvailable: stepsAvailable,
             thresholds: thresholds
         ))
 
@@ -392,7 +397,7 @@ final class BaseBoostActivityMonitor: BoostActivityMonitor, Injectable {
 
         debug(
             .healthKit,
-            "BoostActivityMonitor: steps5/15/30/60=\(steps5)/\(steps15)/\(Int(steps30))/\(steps60) hr=\(Int(latestHr)) rhr=\(Int(restingHr)) state=\(activity.state.rawValue) asleep=\(asleep) postEx=\(recovery.inRecoveryWindow) gate=\(raiseGateOpen)\(sleepSignals.boundaryHold ? " boundaryHold" : "")"
+            "BoostActivityMonitor: steps5/15/30/60=\(steps5)/\(steps15)/\(Int(steps30))/\(steps60) hr=\(Int(latestHr)) rhr=\(Int(restingHr)) state=\(activity.state.rawValue) asleep=\(asleep) postEx=\(recovery.inRecoveryWindow) gate=\(raiseGateOpen)\(sleepSignals.boundaryHold ? " boundaryHold" : "")\(stepsAvailable ? "" : " steps:UNAVAILABLE")"
         )
         debug(
             .healthKit,
@@ -400,7 +405,15 @@ final class BaseBoostActivityMonitor: BoostActivityMonitor, Injectable {
         )
     }
 
-    private func sumSteps(since: Date, now: Date) async -> Double {
+    /// Any error but `errorNoData`, which is how HealthKit reports a window with no samples (0 steps).
+    /// A locked iPhone gives `errorDatabaseInaccessible`. `HealthKit.` because Trio has its own HKError.
+    static func stepReadFailed(_ error: Error?) -> Bool {
+        guard let error = error as NSError? else { return false }
+        return error.domain != HKErrorDomain || error.code != HealthKit.HKError.Code.errorNoData.rawValue
+    }
+
+    /// nil when the read failed.
+    private func sumSteps(since: Date, now: Date) async -> Double? {
         guard let stepType else { return 0 }
         return await withCheckedContinuation { continuation in
             let predicate = HKQuery.predicateForSamples(withStart: since, end: now)
@@ -408,8 +421,12 @@ final class BaseBoostActivityMonitor: BoostActivityMonitor, Injectable {
                 quantityType: stepType,
                 quantitySamplePredicate: predicate,
                 options: .cumulativeSum
-            ) { _, stats, _ in
-                continuation.resume(returning: stats?.sumQuantity()?.doubleValue(for: .count()) ?? 0)
+            ) { _, stats, error in
+                if Self.stepReadFailed(error) {
+                    continuation.resume(returning: nil)
+                } else {
+                    continuation.resume(returning: stats?.sumQuantity()?.doubleValue(for: .count()) ?? 0)
+                }
             }
             healthKitStore.execute(query)
         }

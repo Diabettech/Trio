@@ -335,6 +335,7 @@
 		3BBB76AA2E01C70B0040977D /* MealCob.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BBB76A92E01C7070040977D /* MealCob.swift */; };
 		3BBC22632DF5B94100169236 /* AutosensTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BBC22622DF5B93900169236 /* AutosensTests.swift */; };
 		B0057150A11F2026BA5E0002 /* BoostISFAutosensTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0057150A11F2026BA5E0001 /* BoostISFAutosensTests.swift */; };
+		B005715ACF2026115E200002 /* BoostStepReadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B005715ACF2026115E200001 /* BoostStepReadTests.swift */; };
 		3BC07D6F3017B837004F96AF /* DecimalExtensions+SwiftUI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BC07D6E3017B830004F96AF /* DecimalExtensions+SwiftUI.swift */; };
 		3BC26E552D7418830066ACD6 /* IobSuspendTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3BC26E542D7418830066ACD6 /* IobSuspendTests.swift */; };
 		3BCA5F7C2DC7B16400A7EAC7 /* pumphistory-with-external.json in Resources */ = {isa = PBXBuildFile; fileRef = 3BCA5F7B2DC7B15400A7EAC7 /* pumphistory-with-external.json */; };
@@ -1609,6 +1610,7 @@
 		3BBB76A92E01C7070040977D /* MealCob.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MealCob.swift; sourceTree = "<group>"; };
 		3BBC22622DF5B93900169236 /* AutosensTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutosensTests.swift; sourceTree = "<group>"; };
 		B0057150A11F2026BA5E0001 /* BoostISFAutosensTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoostISFAutosensTests.swift; sourceTree = "<group>"; };
+		B005715ACF2026115E200001 /* BoostStepReadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoostStepReadTests.swift; sourceTree = "<group>"; };
 		3BC07D6E3017B830004F96AF /* DecimalExtensions+SwiftUI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DecimalExtensions+SwiftUI.swift"; sourceTree = "<group>"; };
 		3BC26E542D7418830066ACD6 /* IobSuspendTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IobSuspendTests.swift; sourceTree = "<group>"; };
 		3BCA5F7B2DC7B15400A7EAC7 /* pumphistory-with-external.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "pumphistory-with-external.json"; sourceTree = "<group>"; };
@@ -3671,6 +3673,7 @@
 			isa = PBXGroup;
 			children = (
 				A1A0EDA730974FFF0028A032 /* GlucoseFormattingTests.swift */,
+				B005715ACF2026115E200001 /* BoostStepReadTests.swift */,
 				A1EF5D9A309CEF01007282CC /* DurationFormattingTests.swift */,
 				A1A0EDF43097CE470028A032 /* PercentFormattingTests.swift */,
 				DDDD0FFD2F4E231600F9C645 /* Mocks */,
@@ -6803,6 +6806,7 @@
 				3BE2F1E82E030E2F009E2900 /* MealCobTests.swift in Sources */,
 				3BBC22632DF5B94100169236 /* AutosensTests.swift in Sources */,
 				B0057150A11F2026BA5E0002 /* BoostISFAutosensTests.swift in Sources */,
+				B005715ACF2026115E200002 /* BoostStepReadTests.swift in Sources */,
 				BD8FC0542D66186000B95AED /* TestError.swift in Sources */,
 				FB9012AE66284A92A6531037 /* NightscoutUploadSerializerTests.swift in Sources */,
 				782BE9AEFDD94938A6F3EFE9 /* NightscoutImportRoundTripTests.swift in Sources */,

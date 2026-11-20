@@ -323,6 +323,30 @@ final class ActivityClassifierTests: XCTestCase {
         XCTAssertFalse(NightMode.minuteInWindow(now: 12 * 60, start: 22 * 60, end: 7 * 60))
     }
 
+    // MARK: - Step feed unavailable (AAPS StepFeed, 2026-11-20)
+
+    // A locked iPhone cannot read Health, so every step window reads 0. That is no evidence of rest,
+    // and the inactivity raise (130%, more insulin) must not fire on it.
+    func testNoInactivityRaiseWhenTheStepFeedIsUnavailable() {
+        var i = stepOnlyInputs(s5: 0, s15: 0, s30: 0, s60: 0)
+        XCTAssertEqual(ActivityClassifier.classify(i).profilePercent, 130) // the same inputs with a live feed
+        i.stepsAvailable = false
+        let r = ActivityClassifier.classify(i)
+        XCTAssertEqual(r.state, .stepsUnknown)
+        XCTAssertEqual(r.profilePercent, 100)
+        XCTAssertNil(r.targetBgMgdl)
+        XCTAssertFalse(r.exerciseActive)
+    }
+
+    // HR-only classification still runs without steps, as in AAPS classifyBoostActivity.
+    func testHrOnlyResistanceStillFiresWhenTheStepFeedIsUnavailable() {
+        let i = ActivityInputs(
+            steps5: 0, steps15: 0, steps30: 0, steps60: 0,
+            avgHeartRate: 140, stepsAvailable: false, thresholds: hrThresholds()
+        )
+        XCTAssertEqual(ActivityClassifier.classify(i).state, .resistance)
+    }
+
     // MARK: - exerciseActive flag coverage
 
     func testExerciseActiveFlagPerState() {
