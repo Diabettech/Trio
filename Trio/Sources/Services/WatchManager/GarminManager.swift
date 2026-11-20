@@ -1076,6 +1076,22 @@ extension BaseGarminManager: IQUIOverrideDelegate, IQDeviceEventDelegate, IQAppM
         let appName = appDisplayName(for: appUUID)
         debugGarmin("Message received from Garmin \(appName)")
 
+        // Heart rate and steps from the Boost face, for Boost while Apple Health is locked.
+        if let body = message as? [String: Any], body["boostActivity"] != nil,
+           appUUID == GarminWatchface.boost.watchfaceUUID
+        {
+            let nowMs = Date().timeIntervalSince1970 * 1000
+            if let batch = WatchActivityFeedStore.shared.ingestGarmin(body, receivedAtMs: nowMs) {
+                debug(
+                    .watch,
+                    "Garmin activity: \(batch.heartRate.count) HR, \(batch.steps.count) step samples, sent \(Int((nowMs - batch.sentAtMs) / 1000)) s ago"
+                )
+            } else {
+                warning(.watch, "Garmin activity message not understood, keys: \(body.keys.sorted())")
+            }
+            return
+        }
+
         // If watch requests status update, send current data via unified path
         guard let statusString = message as? String, statusString == "status" else {
             return

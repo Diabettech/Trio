@@ -20,7 +20,19 @@ final class WatchActivityFeedStore: @unchecked Sendable {
         var steps: [WatchActivityFeed.Sample] = []
         var lastSentAtMs: Double = 0
         var lastReceivedAtMs: Double = 0
+        // The Garmin face's step counter at its previous wake, epoch s (Garmin sends the counter).
+        var garminPrevT: Double?
+        var garminPrevCum: Double?
+        // Since when the Garmin steps run without a break, epoch ms; nil before any Garmin message.
+        var garminCoveredSinceMs: Double?
     }
+
+    /// The longest gap between two Garmin wakes whose counter difference is placed between them.
+    /// Wakes are 5 to 6 min apart. After a longer gap (out of range, a restart) the steps cannot be
+    /// placed in time, so the run starts again and the Garmin steps are not used until it covers the
+    /// 60-minute window: an hour holding only part of the steps would read a walk as sitting still.
+    static let garminMaxGapS: Double = 15 * 60
+    static let garminCoverMs: Double = 3_600_000
 
     private let key = "boost_watch_activity_feed_v1"
     private let lock = NSLock()
@@ -51,6 +63,42 @@ final class WatchActivityFeedStore: @unchecked Sendable {
         if let data = try? JSONEncoder().encode(s) { defaults.set(data, forKey: key) }
     }
 
+    /// A message from the Boost Garmin face: `t` (epoch s), `cum` (the watch's daily step counter, -1
+    /// when unread) and `hr` ([[epoch s, bpm]]). The counter becomes one step sample between this
+    /// wake and the previous one; a counter that went down (the midnight reset) or a gap over
+    /// `garminMaxGapS` gives no sample and starts again from here. Returns the batch stored, or nil
+    /// for a malformed message.
+    @discardableResult func ingestGarmin(_ body: [String: Any], receivedAtMs: Double) -> WatchActivityFeed.Batch? {
+        guard let t = (body["t"] as? NSNumber)?.doubleValue, t.isFinite,
+              let cum = (body["cum"] as? NSNumber)?.doubleValue, cum.isFinite,
+              let rows = body["hr"] as? [[NSNumber]]
+        else { return nil }
+        var hr: [WatchActivityFeed.Sample] = []
+        for r in rows {
+            guard r.count == 2, r[0].doubleValue.isFinite, r[0].doubleValue > 0, r[1].doubleValue > 0 else { return nil }
+            let ms = r[0].doubleValue * 1000
+            hr.append(.init(startMs: ms, endMs: ms, value: r[1].doubleValue))
+        }
+        lock.lock()
+        var s = load()
+        var steps: [WatchActivityFeed.Sample] = []
+        if cum >= 0 {
+            if let pt = s.garminPrevT, let pc = s.garminPrevCum, t > pt, t - pt <= Self.garminMaxGapS {
+                // A counter that went down was reset at midnight; the steps since then are a lower bound.
+                steps.append(.init(startMs: pt * 1000, endMs: t * 1000, value: cum >= pc ? cum - pc : cum))
+            } else {
+                s.garminCoveredSinceMs = t * 1000
+            }
+            s.garminPrevT = t
+            s.garminPrevCum = cum
+        }
+        if let data = try? JSONEncoder().encode(s) { defaults.set(data, forKey: key) }
+        lock.unlock()
+        let batch = WatchActivityFeed.Batch(sentAtMs: t * 1000, heartRate: hr, steps: steps)
+        ingest(batch, receivedAtMs: receivedAtMs)
+        return batch
+    }
+
     /// Age of the newest batch at `nowMs`, by the watch's clock; nil when none has arrived.
     func ageMs(nowMs: Double) -> Double? {
         lock.lock()
@@ -68,8 +116,14 @@ final class WatchActivityFeedStore: @unchecked Sendable {
     /// sample within `freshMs`. A watch on the wrist records heart rate every few minutes in the
     /// background; one off the wrist records none, and its batches carry no steps because nobody is
     /// wearing it, which must not read as sitting still (the INACTIVE raise adds insulin).
+    /// With a Garmin feeding it, the steps must also have run without a break for the whole hour.
     func stepsUsable(nowMs: Double) -> Bool {
-        isLive(nowMs: nowMs) && !heartRate(sinceMs: nowMs - Self.freshMs, nowMs: nowMs).isEmpty
+        let covered: Bool = {
+            lock.lock()
+            defer { lock.unlock() }
+            return load().garminCoveredSinceMs.map { nowMs - $0 >= Self.garminCoverMs } ?? true
+        }()
+        return covered && isLive(nowMs: nowMs) && !heartRate(sinceMs: nowMs - Self.freshMs, nowMs: nowMs).isEmpty
     }
 
     /// Steps in [sinceMs, nowMs], a sample straddling an edge counted in proportion to its overlap,

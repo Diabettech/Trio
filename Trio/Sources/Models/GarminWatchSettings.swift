@@ -55,6 +55,9 @@ enum GarminWatchface: String, JSON, CaseIterable, Identifiable, Codable, Hashabl
     /// It takes the watchface slot because someone on complications is by definition
     /// not running one of the Trio watchfaces, which leaves that slot free.
     case complication
+    /// The Boost BG-ring face (tim2000s/BoostGarmin, built with monkey-trio.jungle). Reads Trio's
+    /// state push and sends heart rate and steps back for Boost (testing branch).
+    case boost
 
     var displayName: String {
         switch self {
@@ -64,6 +67,8 @@ enum GarminWatchface: String, JSON, CaseIterable, Identifiable, Codable, Hashabl
             return String(localized: "Swissalpine", comment: "")
         case .complication:
             return String(localized: "Complication", comment: "")
+        case .boost:
+            return String(localized: "Boost", comment: "")
         }
     }
 
@@ -80,6 +85,8 @@ enum GarminWatchface: String, JSON, CaseIterable, Identifiable, Codable, Hashabl
         case .complication:
             // return UUID(uuidString: "a897ce34-1135-4632-b855-1c75f1ec27bf") // ConnectIQ beta build
             return UUID(uuidString: "0986fd19-604b-4bcb-a931-6f8621738682") // ConnectIQ live build
+        case .boost:
+            return UUID(uuidString: "c87388c1-f2c7-4b3b-aec0-ed1d11af74de") // BoostGarmin manifest id, sideloaded
         }
     }
 }
